@@ -1,0 +1,2342 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+
+
+<title>Donation experiment - main study analysis</title>
+
+<script src="main_analysis_files/header-attrs-2.29/header-attrs.js"></script>
+<script src="main_analysis_files/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="main_analysis_files/bootstrap-3.3.5/css/bootstrap.min.css" rel="stylesheet" />
+<script src="main_analysis_files/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="main_analysis_files/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="main_analysis_files/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="main_analysis_files/navigation-1.1/tabsets.js"></script>
+<link href="main_analysis_files/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="main_analysis_files/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "\e258";
+  font-family: 'Glyphicons Halflings';
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Donation experiment - main study
+analysis</h1>
+
+</div>
+
+
+<pre class="r"><code>library(dplyr); library(tidyr); library(afex); library(emmeans); library(broom); library(knitr)
+# all generated outputs (.tex tables, figure files) go here; self_contained is
+# off above so knitting does not delete this folder afterwards
+out_dir &lt;- &quot;main_analysis_files&quot;
+dir.create(out_dir, showWarnings = FALSE)
+d &lt;- read.csv(&quot;main_data.csv&quot;, na.strings = c(&quot;NA&quot;, &quot;&quot;)) %&gt;% filter(!is.na(condition))
+
+# duplicate-answer participants are removed upstream by process_data_short.R
+stopifnot(&quot;DUPLICATE flags in data - rerun processing&quot; =
+            !any(sapply(d, function(x) any(grepl(&quot;^DUPLICATE\\[&quot;, x)))))
+
+##remove participants without match
+d &lt;- subset(d, completion_code != &quot;C17HW55D&quot;)
+
+##subset to the three advice seeking conditions
+seek &lt;- d %&gt;% filter(condition %in% c(&quot;H_AI&quot;, &quot;H_control&quot;, &quot;H_H_seeker&quot;))  # decision-makers</code></pre>
+<div id="descriptives" class="section level1">
+<h1>Descriptives</h1>
+<pre class="r"><code>seek %&gt;% group_by(condition) %&gt;%
+  summarise(n = n(), initial = mean(initial_donation_amount, na.rm = TRUE),
+            final = mean(final_donation_amount, na.rm = TRUE),
+            confidence = mean(decision_confidence, na.rm = TRUE)) %&gt;%
+  kable(digits = 1)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">condition</th>
+<th align="right">n</th>
+<th align="right">initial</th>
+<th align="right">final</th>
+<th align="right">confidence</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">H_AI</td>
+<td align="right">145</td>
+<td align="right">27.5</td>
+<td align="right">25.8</td>
+<td align="right">82.7</td>
+</tr>
+<tr class="even">
+<td align="left">H_H_seeker</td>
+<td align="right">149</td>
+<td align="right">28.1</td>
+<td align="right">28.3</td>
+<td align="right">83.4</td>
+</tr>
+<tr class="odd">
+<td align="left">H_control</td>
+<td align="right">129</td>
+<td align="right">NaN</td>
+<td align="right">30.4</td>
+<td align="right">78.7</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="sample-demographics" class="section level1">
+<h1>Sample demographics</h1>
+<p>Full analysed sample (decision-makers and advisors).</p>
+<pre class="r"><code>d %&gt;% summarise(n = n(),
+                age_mean = mean(age, na.rm = TRUE), age_sd = sd(age, na.rm = TRUE),
+                age_min = min(age, na.rm = TRUE), age_max = max(age, na.rm = TRUE),
+                age_missing = sum(is.na(age)))</code></pre>
+<pre><code>##     n age_mean   age_sd age_min age_max age_missing
+## 1 572 39.08042 12.46826      18      82           0</code></pre>
+<pre class="r"><code>d %&gt;% count(sex) %&gt;% mutate(percent = round(100 * n / sum(n), 1)) </code></pre>
+<pre><code>##      sex   n percent
+## 1 Female 283    49.5
+## 2   Male 289    50.5</code></pre>
+<pre class="r"><code>d %&gt;% count(condition, sex) %&gt;% group_by(condition) %&gt;%
+  mutate(percent = round(100 * n / sum(n), 1))</code></pre>
+<pre><code>## # A tibble: 8 × 4
+## # Groups:   condition [4]
+##   condition   sex        n percent
+##   &lt;chr&gt;       &lt;chr&gt;  &lt;int&gt;   &lt;dbl&gt;
+## 1 H_AI        Female    72    49.7
+## 2 H_AI        Male      73    50.3
+## 3 H_H_advisor Female    81    54.4
+## 4 H_H_advisor Male      68    45.6
+## 5 H_H_seeker  Female    75    50.3
+## 6 H_H_seeker  Male      74    49.7
+## 7 H_control   Female    55    42.6
+## 8 H_control   Male      74    57.4</code></pre>
+</div>
+<div id="main-hypothesis-tests" class="section level1">
+<h1>Main hypothesis tests</h1>
+<p>Final donation across the three conditions (no covariate: the control
+condition makes a single donation decision, so it has no initial
+donation), then the two advice conditions adjusted for the initial
+donation.</p>
+<pre class="r"><code>res_anova &lt;- aov_ez(&quot;participantId&quot;, &quot;final_donation_amount&quot;, seek, between = &quot;condition&quot;)</code></pre>
+<pre><code>## Converting to factor: condition</code></pre>
+<pre><code>## Contrasts set to contr.sum for the following variables: condition</code></pre>
+<pre class="r"><code>res_anova</code></pre>
+<pre><code>## Anova Table (Type 3 tests)
+## 
+## Response: final_donation_amount
+##      Effect     df    MSE    F  ges p.value
+## 1 condition 2, 420 570.54 1.27 .006    .282
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;+&#39; 0.1 &#39; &#39; 1</code></pre>
+<pre class="r"><code>emmeans(res_anova, ~ condition)</code></pre>
+<pre><code>##  condition  emmean   SE  df lower.CL upper.CL
+##  H_AI         25.8 1.98 420     21.9     29.7
+##  H_control    30.4 2.10 420     26.2     34.5
+##  H_H_seeker   28.3 1.96 420     24.5     32.2
+## 
+## Confidence level used: 0.95</code></pre>
+<pre class="r"><code>pairs(emmeans(res_anova, ~ condition), adjust = &quot;none&quot;)</code></pre>
+<pre><code>##  contrast               estimate   SE  df t.ratio p.value
+##  H_AI - H_control          -4.59 2.89 420  -1.587  0.1134
+##  H_AI - H_H_seeker         -2.54 2.79 420  -0.912  0.3620
+##  H_control - H_H_seeker     2.04 2.87 420   0.712  0.4771</code></pre>
+<pre class="r"><code>adv &lt;- seek %&gt;% filter(condition != &quot;H_control&quot;)
+adv$initial_donation_amount &lt;- scale(adv$initial_donation_amount, scale = FALSE)
+res_ancova &lt;- aov_ez(&quot;participantId&quot;, &quot;final_donation_amount&quot;, adv, between = &quot;condition&quot;,
+                     covariate = &quot;initial_donation_amount&quot;, factorize = FALSE)</code></pre>
+<pre><code>## Contrasts set to contr.sum for the following variables: condition</code></pre>
+<pre class="r"><code>res_ancova</code></pre>
+<pre><code>## Anova Table (Type 3 tests)
+## 
+## Response: final_donation_amount
+##                    Effect     df    MSE          F  ges p.value
+## 1               condition 1, 291 176.24       1.67 .006    .198
+## 2 initial_donation_amount 1, 291 176.24 639.86 *** .687   &lt;.001
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;+&#39; 0.1 &#39; &#39; 1</code></pre>
+<pre class="r"><code>pairs(emmeans(res_ancova, ~ condition), adjust = &quot;none&quot;)</code></pre>
+<pre><code>##  contrast          estimate   SE  df t.ratio p.value
+##  H_AI - H_H_seeker       -2 1.55 291  -1.291  0.1979</code></pre>
+<div id="bayesian-t-tests-bayesfactor-default-cauchy-prior-r-0.707"
+class="section level2">
+<h2>Bayesian t-tests (BayesFactor, default Cauchy prior r = 0.707)</h2>
+<p>Three two-sample Bayesian t-tests: each advice arm vs control on the
+final donation (control has no initial donation, so no change score
+there), and LLM vs human advice on the change score (final - initial).
+BF10 quantifies evidence for a difference; BF01 = 1/BF10 for the
+null.</p>
+<pre class="r"><code>library(BayesFactor)</code></pre>
+<pre><code>## Warning: package &#39;BayesFactor&#39; was built under R version 4.5.3</code></pre>
+<pre class="r"><code>seek$change &lt;- seek$final_donation_amount - seek$initial_donation_amount
+
+# LLM vs control, final donation
+1/ttestBF(x = subset(seek, condition == &quot;H_AI&quot;)$final_donation_amount,
+        y = subset(seek, condition == &quot;H_control&quot;)$final_donation_amount)</code></pre>
+<pre><code>## Bayes factor analysis
+## --------------
+## [1] Null, mu1-mu2=0 : 2.374615 ±0.04%
+## 
+## Against denominator:
+##   Alternative, r = 0.707106781186548, mu =/= 0 
+## ---
+## Bayes factor type: BFindepSample, JZS</code></pre>
+<pre class="r"><code># Human vs control, final donation
+1/ttestBF(x = subset(seek, condition == &quot;H_H_seeker&quot;)$final_donation_amount,
+        y = subset(seek, condition == &quot;H_control&quot;)$final_donation_amount)</code></pre>
+<pre><code>## Bayes factor analysis
+## --------------
+## [1] Null, mu1-mu2=0 : 5.922429 ±0.08%
+## 
+## Against denominator:
+##   Alternative, r = 0.707106781186548, mu =/= 0 
+## ---
+## Bayes factor type: BFindepSample, JZS</code></pre>
+<pre class="r"><code># LLM vs human, change score
+1/ttestBF(x = subset(seek, condition == &quot;H_AI&quot;)$final_donation_amount,
+        y = subset(seek, condition == &quot;H_H_seeker&quot;)$final_donation_amount)</code></pre>
+<pre><code>## Bayes factor analysis
+## --------------
+## [1] Null, mu1-mu2=0 : 5.207124 ±0.08%
+## 
+## Against denominator:
+##   Alternative, r = 0.707106781186548, mu =/= 0 
+## ---
+## Bayes factor type: BFindepSample, JZS</code></pre>
+<pre class="r"><code># LLM vs human, change score
+1/ttestBF(x = subset(seek, condition == &quot;H_AI&quot;)$change,
+        y = subset(seek, condition == &quot;H_H_seeker&quot;)$change)</code></pre>
+<pre><code>## Bayes factor analysis
+## --------------
+## [1] Null, mu1-mu2=0 : 4.2352 ±0.06%
+## 
+## Against denominator:
+##   Alternative, r = 0.707106781186548, mu =/= 0 
+## ---
+## Bayes factor type: BFindepSample, JZS</code></pre>
+</div>
+</div>
+<div id="does-advice-change-decision-confidence" class="section level1">
+<h1>1. Does advice change decision confidence?</h1>
+<pre class="r"><code>res_conf &lt;- aov_ez(&quot;participantId&quot;, &quot;decision_confidence&quot;, seek, between = &quot;condition&quot;)</code></pre>
+<pre><code>## Converting to factor: condition</code></pre>
+<pre><code>## Contrasts set to contr.sum for the following variables: condition</code></pre>
+<pre class="r"><code>res_conf</code></pre>
+<pre><code>## Anova Table (Type 3 tests)
+## 
+## Response: decision_confidence
+##      Effect     df    MSE    F  ges p.value
+## 1 condition 2, 420 483.46 1.87 .009    .155
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;+&#39; 0.1 &#39; &#39; 1</code></pre>
+<pre class="r"><code>emmeans(res_conf, ~ condition)</code></pre>
+<pre><code>##  condition  emmean   SE  df lower.CL upper.CL
+##  H_AI         82.7 1.83 420     79.2     86.3
+##  H_control    78.7 1.94 420     74.8     82.5
+##  H_H_seeker   83.4 1.80 420     79.9     87.0
+## 
+## Confidence level used: 0.95</code></pre>
+<pre class="r"><code>pairs(emmeans(res_conf, ~ condition), adjust = &quot;none&quot;)</code></pre>
+<pre><code>##  contrast               estimate   SE  df t.ratio p.value
+##  H_AI - H_control          4.094 2.66 420   1.538  0.1247
+##  H_AI - H_H_seeker        -0.705 2.56 420  -0.275  0.7836
+##  H_control - H_H_seeker   -4.799 2.64 420  -1.815  0.0703</code></pre>
+<pre class="r"><code># Bayesian versions (BF01)
+# LLM vs control
+1/ttestBF(x = subset(seek, condition == &quot;H_AI&quot;)$decision_confidence,
+        y = subset(seek, condition == &quot;H_control&quot;)$decision_confidence)</code></pre>
+<pre><code>## Bayes factor analysis
+## --------------
+## [1] Null, mu1-mu2=0 : 2.629581 ±0.04%
+## 
+## Against denominator:
+##   Alternative, r = 0.707106781186548, mu =/= 0 
+## ---
+## Bayes factor type: BFindepSample, JZS</code></pre>
+<pre class="r"><code># Human vs control
+1/ttestBF(x = subset(seek, condition == &quot;H_H_seeker&quot;)$decision_confidence,
+        y = subset(seek, condition == &quot;H_control&quot;)$decision_confidence)</code></pre>
+<pre><code>## Bayes factor analysis
+## --------------
+## [1] Null, mu1-mu2=0 : 1.518116 ±0.03%
+## 
+## Against denominator:
+##   Alternative, r = 0.707106781186548, mu =/= 0 
+## ---
+## Bayes factor type: BFindepSample, JZS</code></pre>
+<pre class="r"><code># LLM vs human
+1/ttestBF(x = subset(seek, condition == &quot;H_AI&quot;)$decision_confidence,
+        y = subset(seek, condition == &quot;H_H_seeker&quot;)$decision_confidence)</code></pre>
+<pre><code>## Bayes factor analysis
+## --------------
+## [1] Null, mu1-mu2=0 : 7.507643 ±0.1%
+## 
+## Against denominator:
+##   Alternative, r = 0.707106781186548, mu =/= 0 
+## ---
+## Bayes factor type: BFindepSample, JZS</code></pre>
+</div>
+<div
+id="do-the-individual-difference-scales-moderate-the-effect-of-advice-on-donations"
+class="section level1">
+<h1>2. Do the individual-difference scales moderate the effect of advice
+on donations?</h1>
+<pre class="r"><code>scales &lt;- list(
+  ai_attitudes = c(&quot;ai_beneficial_apps&quot;, &quot;ai_positive_wellbeing&quot;, &quot;ai_economic_opportunities&quot;,
+                   &quot;ai_better_than_humans&quot;, &quot;ai_society_benefit&quot;, &quot;ai_daily_life_interest&quot;,
+                   &quot;ai_prefer_routine_interact&quot;, &quot;ai_better_routine_jobs&quot;, &quot;ai_job_use_interest&quot;,
+                   &quot;ai_complex_decisions&quot;, &quot;ai_life_savings_trust&quot;),
+  et_trust     = c(&quot;people_advice_problem&quot;, &quot;learn_from_experiences&quot;, &quot;ask_valued_opinion&quot;),
+  et_mistrust  = c(&quot;prefer_internet_info&quot;, &quot;people_misunderstand_needs&quot;, &quot;faith_people_hurt&quot;,
+                   &quot;question_motives&quot;, &quot;avoid_acting_on_advice&quot;),
+  et_credulity = c(&quot;naive_believe_people&quot;, &quot;persuaded_by_people&quot;, &quot;wrong_people_advice&quot;,
+                   &quot;too_easily_influenced&quot;),
+  aot = NULL,   # built below with reversals
+  ai_use_freq = &quot;ai_use_freq&quot;, ai_advice_freq = &quot;ai_personal_advice_freq&quot;,
+  human_advice_freq = &quot;human_advice_freq&quot;)
+
+seek &lt;- seek %&gt;% mutate(across(c(persevere_against_evidence, beliefs_too_important,
+                                 disregard_conflicting_evidence, cannot_talk_out_right,
+                                 loyalty_over_open_mindedness), ~ 7 - .x, .names = &quot;{.col}_r&quot;))
+scales$aot &lt;- c(&quot;consider_new_possibilities&quot;, &quot;consider_contrary_evidence&quot;, &quot;revise_beliefs_new_info&quot;,
+                &quot;persevere_against_evidence_r&quot;, &quot;beliefs_too_important_r&quot;,
+                &quot;disregard_conflicting_evidence_r&quot;, &quot;cannot_talk_out_right_r&quot;,
+                &quot;loyalty_over_open_mindedness_r&quot;)
+for (s in names(scales)) seek[[s]] &lt;- rowMeans(seek[scales[[s]]], na.rm = TRUE)
+sapply(scales, length)   # items per scale: 11 / 3 / 5 / 4 / 8 / 1 / 1 / 1</code></pre>
+<pre><code>##      ai_attitudes          et_trust       et_mistrust      et_credulity 
+##                11                 3                 5                 4 
+##               aot       ai_use_freq    ai_advice_freq human_advice_freq 
+##                 8                 1                 1                 1</code></pre>
+<p>Within-scale item correlations</p>
+<pre class="r"><code>for (s in c(&quot;ai_attitudes&quot;, &quot;et_trust&quot;, &quot;et_mistrust&quot;, &quot;et_credulity&quot;, &quot;aot&quot;)) {
+  m &lt;- round(cor(seek[scales[[s]]]), 2)
+  colnames(m) &lt;- abbreviate(colnames(m), 8)
+  cat(&quot;\n==&quot;, s, &quot;- mean inter-item r:&quot;, round(mean(m[lower.tri(m)]), 2), &quot;\n&quot;)
+  print(m)
+}</code></pre>
+<pre><code>## 
+## == ai_attitudes - mean inter-item r: 0.47 
+##                            a_bnfcl_ a_pstv_w a_cnmc_p a_bttr_t_ a_scty_b
+## ai_beneficial_apps             1.00     0.68     0.64      0.45     0.61
+## ai_positive_wellbeing          0.68     1.00     0.60      0.45     0.61
+## ai_economic_opportunities      0.64     0.60     1.00      0.44     0.55
+## ai_better_than_humans          0.45     0.45     0.44      1.00     0.42
+## ai_society_benefit             0.61     0.61     0.55      0.42     1.00
+## ai_daily_life_interest         0.67     0.61     0.56      0.40     0.70
+## ai_prefer_routine_interact     0.34     0.37     0.36      0.34     0.48
+## ai_better_routine_jobs         0.46     0.39     0.43      0.50     0.45
+## ai_job_use_interest            0.57     0.48     0.50      0.37     0.58
+## ai_complex_decisions           0.39     0.43     0.36      0.39     0.52
+## ai_life_savings_trust          0.27     0.33     0.29      0.26     0.42
+##                            a_dly_l_ a_prfr__ a_bttr_r_ a_jb_s_n a_cmplx_
+## ai_beneficial_apps             0.67     0.34      0.46     0.57     0.39
+## ai_positive_wellbeing          0.61     0.37      0.39     0.48     0.43
+## ai_economic_opportunities      0.56     0.36      0.43     0.50     0.36
+## ai_better_than_humans          0.40     0.34      0.50     0.37     0.39
+## ai_society_benefit             0.70     0.48      0.45     0.58     0.52
+## ai_daily_life_interest         1.00     0.49      0.49     0.73     0.48
+## ai_prefer_routine_interact     0.49     1.00      0.58     0.50     0.43
+## ai_better_routine_jobs         0.49     0.58      1.00     0.50     0.50
+## ai_job_use_interest            0.73     0.50      0.50     1.00     0.47
+## ai_complex_decisions           0.48     0.43      0.50     0.47     1.00
+## ai_life_savings_trust          0.38     0.40      0.36     0.39     0.51
+##                            a_lf_sv_
+## ai_beneficial_apps             0.27
+## ai_positive_wellbeing          0.33
+## ai_economic_opportunities      0.29
+## ai_better_than_humans          0.26
+## ai_society_benefit             0.42
+## ai_daily_life_interest         0.38
+## ai_prefer_routine_interact     0.40
+## ai_better_routine_jobs         0.36
+## ai_job_use_interest            0.39
+## ai_complex_decisions           0.51
+## ai_life_savings_trust          1.00
+## 
+## == et_trust - mean inter-item r: 0.31 
+##                        ppl_dvc_ lrn_frm_ ask_vld_
+## people_advice_problem      1.00     0.19     0.50
+## learn_from_experiences     0.19     1.00     0.23
+## ask_valued_opinion         0.50     0.23     1.00
+## 
+## == et_mistrust - mean inter-item r: 0.28 
+##                            prfr_nt_ ppl_msn_ fth_ppl_ qstn_mtv avd_ct__
+## prefer_internet_info           1.00     0.33     0.19     0.22     0.16
+## people_misunderstand_needs     0.33     1.00     0.35     0.30     0.29
+## faith_people_hurt              0.19     0.35     1.00     0.44     0.30
+## question_motives               0.22     0.30     0.44     1.00     0.26
+## avoid_acting_on_advice         0.16     0.29     0.30     0.26     1.00
+## 
+## == et_credulity - mean inter-item r: 0.52 
+##                       nv_blv_p prsdd_b_ wrng_pp_ t_sly_nf
+## naive_believe_people      1.00     0.65     0.37     0.61
+## persuaded_by_people       0.65     1.00     0.34     0.58
+## wrong_people_advice       0.37     0.34     1.00     0.56
+## too_easily_influenced     0.61     0.58     0.56     1.00
+## 
+## == aot - mean inter-item r: 0.28 
+##                                  cnsdr_n_ cnsdr_c_ rvs_bl__ prsvr___ blfs_t__
+## consider_new_possibilities           1.00     0.37     0.22     0.02     0.02
+## consider_contrary_evidence           0.37     1.00     0.42     0.26     0.27
+## revise_beliefs_new_info              0.22     0.42     1.00     0.37     0.35
+## persevere_against_evidence_r         0.02     0.26     0.37     1.00     0.66
+## beliefs_too_important_r              0.02     0.27     0.35     0.66     1.00
+## disregard_conflicting_evidence_r     0.13     0.32     0.23     0.45     0.48
+## cannot_talk_out_right_r             -0.06     0.14     0.05     0.23     0.31
+## loyalty_over_open_mindedness_r       0.04     0.27     0.26     0.50     0.51
+##                                  dsrgr___ cnnt____ lylt____
+## consider_new_possibilities           0.13    -0.06     0.04
+## consider_contrary_evidence           0.32     0.14     0.27
+## revise_beliefs_new_info              0.23     0.05     0.26
+## persevere_against_evidence_r         0.45     0.23     0.50
+## beliefs_too_important_r              0.48     0.31     0.51
+## disregard_conflicting_evidence_r     1.00     0.25     0.50
+## cannot_talk_out_right_r              0.25     1.00     0.39
+## loyalty_over_open_mindedness_r       0.50     0.39     1.00</code></pre>
+<p>Correlations between the scale scores.</p>
+<pre class="r"><code>round(cor(seek[names(scales)]), 2) %&gt;% kable()</code></pre>
+<table style="width:100%;">
+<colgroup>
+<col width="15%" />
+<col width="11%" />
+<col width="7%" />
+<col width="10%" />
+<col width="11%" />
+<col width="5%" />
+<col width="10%" />
+<col width="12%" />
+<col width="15%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left"></th>
+<th align="right">ai_attitudes</th>
+<th align="right">et_trust</th>
+<th align="right">et_mistrust</th>
+<th align="right">et_credulity</th>
+<th align="right">aot</th>
+<th align="right">ai_use_freq</th>
+<th align="right">ai_advice_freq</th>
+<th align="right">human_advice_freq</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">ai_attitudes</td>
+<td align="right">1.00</td>
+<td align="right">-0.07</td>
+<td align="right">0.26</td>
+<td align="right">0.16</td>
+<td align="right">-0.09</td>
+<td align="right">-0.63</td>
+<td align="right">-0.59</td>
+<td align="right">-0.04</td>
+</tr>
+<tr class="even">
+<td align="left">et_trust</td>
+<td align="right">-0.07</td>
+<td align="right">1.00</td>
+<td align="right">-0.25</td>
+<td align="right">0.20</td>
+<td align="right">-0.09</td>
+<td align="right">0.05</td>
+<td align="right">-0.06</td>
+<td align="right">-0.42</td>
+</tr>
+<tr class="odd">
+<td align="left">et_mistrust</td>
+<td align="right">0.26</td>
+<td align="right">-0.25</td>
+<td align="right">1.00</td>
+<td align="right">0.34</td>
+<td align="right">-0.21</td>
+<td align="right">-0.28</td>
+<td align="right">-0.27</td>
+<td align="right">0.06</td>
+</tr>
+<tr class="even">
+<td align="left">et_credulity</td>
+<td align="right">0.16</td>
+<td align="right">0.20</td>
+<td align="right">0.34</td>
+<td align="right">1.00</td>
+<td align="right">-0.33</td>
+<td align="right">-0.14</td>
+<td align="right">-0.31</td>
+<td align="right">-0.27</td>
+</tr>
+<tr class="odd">
+<td align="left">aot</td>
+<td align="right">-0.09</td>
+<td align="right">-0.09</td>
+<td align="right">-0.21</td>
+<td align="right">-0.33</td>
+<td align="right">1.00</td>
+<td align="right">0.12</td>
+<td align="right">0.26</td>
+<td align="right">0.19</td>
+</tr>
+<tr class="even">
+<td align="left">ai_use_freq</td>
+<td align="right">-0.63</td>
+<td align="right">0.05</td>
+<td align="right">-0.28</td>
+<td align="right">-0.14</td>
+<td align="right">0.12</td>
+<td align="right">1.00</td>
+<td align="right">0.65</td>
+<td align="right">0.17</td>
+</tr>
+<tr class="odd">
+<td align="left">ai_advice_freq</td>
+<td align="right">-0.59</td>
+<td align="right">-0.06</td>
+<td align="right">-0.27</td>
+<td align="right">-0.31</td>
+<td align="right">0.26</td>
+<td align="right">0.65</td>
+<td align="right">1.00</td>
+<td align="right">0.36</td>
+</tr>
+<tr class="even">
+<td align="left">human_advice_freq</td>
+<td align="right">-0.04</td>
+<td align="right">-0.42</td>
+<td align="right">0.06</td>
+<td align="right">-0.27</td>
+<td align="right">0.19</td>
+<td align="right">0.17</td>
+<td align="right">0.36</td>
+<td align="right">1.00</td>
+</tr>
+</tbody>
+</table>
+<p>Each moderator is tested two ways (z-scored within the analysis
+sample): <strong>separate</strong> - one regression per scale - and
+<strong>joint</strong> - all moderators and their interactions in a
+single model. Both are run for two specifications:</p>
+<ul>
+<li><strong>A. three-level condition, effect-coded</strong> -
+<code>final ~ cond3 * scale</code> with cond3 = LLM / human / no
+advice.</li>
+<li><strong>B. LLM vs human advice with pre-test</strong> -
+<code>final ~ initial + condition * scale</code></li>
+</ul>
+<pre class="r"><code>zsc &lt;- function(df) { for (s in names(scales)) df[[paste0(&quot;z_&quot;, s)]] &lt;- as.numeric(scale(df[[s]])); df }
+seek_z &lt;- zsc(seek) %&gt;%
+  mutate(cond3 = factor(condition, levels = c(&quot;H_AI&quot;, &quot;H_H_seeker&quot;, &quot;H_control&quot;),
+                        labels = c(&quot;LLM&quot;, &quot;human&quot;, &quot;no_advice&quot;)))
+contrasts(seek_z$cond3) &lt;- contr.sum(3)
+colnames(contrasts(seek_z$cond3)) &lt;- c(&quot;LLM&quot;, &quot;human&quot;)
+adv_z  &lt;- zsc(seek %&gt;% filter(condition != &quot;H_control&quot;))
+zs     &lt;- paste0(&quot;z_&quot;, names(scales))
+all_z  &lt;- sprintf(&quot;(%s)&quot;, paste(zs, collapse = &quot; + &quot;))
+
+lmA &lt;- function(rhs) lm(reformulate(sprintf(&quot;cond3 * %s&quot;, rhs),
+                                    &quot;final_donation_amount&quot;), seek_z)
+lmB &lt;- function(rhs) lm(reformulate(c(&quot;initial_donation_amount&quot;,
+                                      sprintf(&quot;condition * %s&quot;, rhs)),
+                                    &quot;final_donation_amount&quot;), adv_z)
+omnibus &lt;- function(m, model, fit) {
+  a &lt;- as.data.frame(car::Anova(m, type = 3)); a$term &lt;- rownames(a)
+  a %&gt;% filter(grepl(&quot;:z_&quot;, term)) %&gt;%
+    transmute(scale = sub(&quot;.*:z_&quot;, &quot;&quot;, term), model, fit,
+              df = Df, F = `F value`, p.value = `Pr(&gt;F)`)
+}
+mod_table &lt;- bind_rows(
+  bind_rows(lapply(zs, function(z) bind_rows(
+    omnibus(lmA(z), &quot;A: 3-level condition&quot;, &quot;separate&quot;),
+    omnibus(lmB(z), &quot;B: LLM vs human (adj.)&quot;, &quot;separate&quot;)))),
+  omnibus(lmA(all_z), &quot;A: 3-level condition&quot;, &quot;joint&quot;),
+  omnibus(lmB(all_z), &quot;B: LLM vs human (adj.)&quot;, &quot;joint&quot;))
+
+mod_table %&gt;%
+  pivot_wider(names_from = fit, values_from = c(F, p.value)) %&gt;%
+  select(scale, model, df, F_separate, p.value_separate, F_joint, p.value_joint) %&gt;%
+  kable(digits = 3)</code></pre>
+<table>
+<colgroup>
+<col width="19%" />
+<col width="24%" />
+<col width="3%" />
+<col width="11%" />
+<col width="18%" />
+<col width="8%" />
+<col width="14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">scale</th>
+<th align="left">model</th>
+<th align="right">df</th>
+<th align="right">F_separate</th>
+<th align="right">p.value_separate</th>
+<th align="right">F_joint</th>
+<th align="right">p.value_joint</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">ai_attitudes</td>
+<td align="left">A: 3-level condition</td>
+<td align="right">2</td>
+<td align="right">0.149</td>
+<td align="right">0.861</td>
+<td align="right">0.160</td>
+<td align="right">0.852</td>
+</tr>
+<tr class="even">
+<td align="left">ai_attitudes</td>
+<td align="left">B: LLM vs human (adj.)</td>
+<td align="right">1</td>
+<td align="right">1.022</td>
+<td align="right">0.313</td>
+<td align="right">2.045</td>
+<td align="right">0.154</td>
+</tr>
+<tr class="odd">
+<td align="left">et_trust</td>
+<td align="left">A: 3-level condition</td>
+<td align="right">2</td>
+<td align="right">0.633</td>
+<td align="right">0.532</td>
+<td align="right">2.307</td>
+<td align="right">0.101</td>
+</tr>
+<tr class="even">
+<td align="left">et_trust</td>
+<td align="left">B: LLM vs human (adj.)</td>
+<td align="right">1</td>
+<td align="right">0.888</td>
+<td align="right">0.347</td>
+<td align="right">0.148</td>
+<td align="right">0.701</td>
+</tr>
+<tr class="odd">
+<td align="left">et_mistrust</td>
+<td align="left">A: 3-level condition</td>
+<td align="right">2</td>
+<td align="right">1.430</td>
+<td align="right">0.240</td>
+<td align="right">1.284</td>
+<td align="right">0.278</td>
+</tr>
+<tr class="even">
+<td align="left">et_mistrust</td>
+<td align="left">B: LLM vs human (adj.)</td>
+<td align="right">1</td>
+<td align="right">1.087</td>
+<td align="right">0.298</td>
+<td align="right">1.611</td>
+<td align="right">0.205</td>
+</tr>
+<tr class="odd">
+<td align="left">et_credulity</td>
+<td align="left">A: 3-level condition</td>
+<td align="right">2</td>
+<td align="right">0.489</td>
+<td align="right">0.613</td>
+<td align="right">0.255</td>
+<td align="right">0.775</td>
+</tr>
+<tr class="even">
+<td align="left">et_credulity</td>
+<td align="left">B: LLM vs human (adj.)</td>
+<td align="right">1</td>
+<td align="right">1.361</td>
+<td align="right">0.244</td>
+<td align="right">2.331</td>
+<td align="right">0.128</td>
+</tr>
+<tr class="odd">
+<td align="left">aot</td>
+<td align="left">A: 3-level condition</td>
+<td align="right">2</td>
+<td align="right">1.372</td>
+<td align="right">0.255</td>
+<td align="right">1.316</td>
+<td align="right">0.269</td>
+</tr>
+<tr class="even">
+<td align="left">aot</td>
+<td align="left">B: LLM vs human (adj.)</td>
+<td align="right">1</td>
+<td align="right">0.494</td>
+<td align="right">0.483</td>
+<td align="right">0.508</td>
+<td align="right">0.477</td>
+</tr>
+<tr class="odd">
+<td align="left">ai_use_freq</td>
+<td align="left">A: 3-level condition</td>
+<td align="right">2</td>
+<td align="right">0.336</td>
+<td align="right">0.715</td>
+<td align="right">0.568</td>
+<td align="right">0.567</td>
+</tr>
+<tr class="even">
+<td align="left">ai_use_freq</td>
+<td align="left">B: LLM vs human (adj.)</td>
+<td align="right">1</td>
+<td align="right">0.011</td>
+<td align="right">0.916</td>
+<td align="right">0.158</td>
+<td align="right">0.692</td>
+</tr>
+<tr class="odd">
+<td align="left">ai_advice_freq</td>
+<td align="left">A: 3-level condition</td>
+<td align="right">2</td>
+<td align="right">0.213</td>
+<td align="right">0.808</td>
+<td align="right">0.293</td>
+<td align="right">0.746</td>
+</tr>
+<tr class="even">
+<td align="left">ai_advice_freq</td>
+<td align="left">B: LLM vs human (adj.)</td>
+<td align="right">1</td>
+<td align="right">0.000</td>
+<td align="right">1.000</td>
+<td align="right">0.960</td>
+<td align="right">0.328</td>
+</tr>
+<tr class="odd">
+<td align="left">human_advice_freq</td>
+<td align="left">A: 3-level condition</td>
+<td align="right">2</td>
+<td align="right">1.149</td>
+<td align="right">0.318</td>
+<td align="right">2.777</td>
+<td align="right">0.063</td>
+</tr>
+<tr class="even">
+<td align="left">human_advice_freq</td>
+<td align="left">B: LLM vs human (adj.)</td>
+<td align="right">1</td>
+<td align="right">0.117</td>
+<td align="right">0.733</td>
+<td align="right">0.010</td>
+<td align="right">0.922</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code># LaTeX version for pasting into Overleaf
+slabs &lt;- c(ai_attitudes = &quot;AI attitudes&quot;, et_trust = &quot;Epistemic trust&quot;,
+           et_mistrust = &quot;Epistemic mistrust&quot;, et_credulity = &quot;Epistemic credulity&quot;,
+           aot = &quot;Actively open-minded thinking&quot;, ai_use_freq = &quot;AI use frequency&quot;,
+           ai_advice_freq = &quot;AI advice frequency&quot;,
+           human_advice_freq = &quot;Human advice frequency&quot;)
+fmtp3 &lt;- function(p) ifelse(p &lt; .001, &quot;$&lt;.001$&quot;, sprintf(&quot;%.3f&quot;, p))
+mod_table %&gt;%
+  pivot_wider(names_from = fit, values_from = c(F, p.value)) %&gt;%
+  transmute(Scale = ifelse(is.na(slabs[scale]), scale, slabs[scale]),
+            Model = model, df = df,
+            Fs = sprintf(&quot;%.2f&quot;, F_separate), ps = fmtp3(p.value_separate),
+            Fj = sprintf(&quot;%.2f&quot;, F_joint),   pj = fmtp3(p.value_joint)) %&gt;%
+  kable(format = &quot;latex&quot;, booktabs = TRUE, escape = FALSE, align = &quot;llccccc&quot;,
+        col.names = c(&quot;Scale&quot;, &quot;Model&quot;, &quot;$df$&quot;, &quot;$F$&quot;, &quot;$p$&quot;, &quot;$F$&quot;, &quot;$p$&quot;),
+        caption = paste(&quot;Moderation of donation decisions by individual-difference&quot;,
+                        &quot;scales: omnibus Type III condition $\\times$ scale interaction&quot;,
+                        &quot;tests. The first $F$/$p$ pair is from separate models (one&quot;,
+                        &quot;moderator per model), the second from the joint model (all&quot;,
+                        &quot;moderators entered together). Model A: three-level condition,&quot;,
+                        &quot;effect-coded, no covariate. Model B: LLM vs.\\ human advice,&quot;,
+                        &quot;adjusted for the initial donation.&quot;),
+        label = &quot;scale_moderation&quot;) %&gt;%
+  writeLines(file.path(out_dir, &quot;scale_moderation_table.tex&quot;))
+cat(&quot;LaTeX table -&gt;&quot;, file.path(out_dir, &quot;scale_moderation_table.tex&quot;), &quot;\n&quot;)</code></pre>
+<pre><code>## LaTeX table -&gt; main_analysis_files/scale_moderation_table.tex</code></pre>
+</div>
+<div
+id="do-people-believe-they-chatted-with-an-llm-or-a-human-by-condition"
+class="section level1">
+<h1>3. Do people believe they chatted with an LLM or a human, by
+condition?</h1>
+<pre class="r"><code>pb &lt;- d %&gt;% filter(condition %in% c(&quot;H_AI&quot;, &quot;H_H_seeker&quot;, &quot;H_H_advisor&quot;),
+                   !is.na(perceived_partner_type)) %&gt;%
+  mutate(believed_llm = perceived_partner_type)
+pb %&gt;% group_by(condition) %&gt;%
+  summarise(n = n(), k = sum(believed_llm), prop_believed_llm = mean(believed_llm),
+            ci_lo = binom.test(k, n)$conf.int[1],
+            ci_hi = binom.test(k, n)$conf.int[2]) %&gt;%
+  select(-k) %&gt;% kable(digits = 2)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">condition</th>
+<th align="right">n</th>
+<th align="right">prop_believed_llm</th>
+<th align="right">ci_lo</th>
+<th align="right">ci_hi</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">H_AI</td>
+<td align="right">145</td>
+<td align="right">1.00</td>
+<td align="right">0.97</td>
+<td align="right">1.00</td>
+</tr>
+<tr class="even">
+<td align="left">H_H_advisor</td>
+<td align="right">149</td>
+<td align="right">0.40</td>
+<td align="right">0.32</td>
+<td align="right">0.48</td>
+</tr>
+<tr class="odd">
+<td align="left">H_H_seeker</td>
+<td align="right">149</td>
+<td align="right">0.36</td>
+<td align="right">0.28</td>
+<td align="right">0.44</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>chisq.test(table(pb$condition[pb$condition != &quot;H_H_advisor&quot;],
+                 pb$believed_llm[pb$condition != &quot;H_H_advisor&quot;]))</code></pre>
+<pre><code>## 
+##  Pearson&#39;s Chi-squared test with Yates&#39; continuity correction
+## 
+## data:  table(pb$condition[pb$condition != &quot;H_H_advisor&quot;], pb$believed_llm[pb$condition !=     &quot;H_H_advisor&quot;])
+## X-squared = 135.8, df = 1, p-value &lt; 2.2e-16</code></pre>
+</div>
+<div id="how-do-the-conversations-differ-between-advisor-types"
+class="section level1">
+<h1>4. How do the conversations differ between advisor types?</h1>
+<pre class="r"><code>library(stringr)
+cv &lt;- seek %&gt;% filter(condition %in% c(&quot;H_AI&quot;, &quot;H_H_seeker&quot;), !is.na(chat_transcript)) %&gt;%
+  mutate(arm = factor(ifelse(condition == &quot;H_AI&quot;, &quot;LLM&quot;, &quot;Human&quot;), c(&quot;Human&quot;, &quot;LLM&quot;)))
+
+advisor_words &lt;- function(tx) {
+  lines &lt;- strsplit(tx, &quot;\n&quot;)[[1]]
+  speaker &lt;- rep(NA_character_, length(lines))
+  speaker[startsWith(lines, &quot;advisee:&quot;)] &lt;- &quot;advisee&quot;
+  speaker[startsWith(lines, &quot;advisor:&quot;)] &lt;- &quot;advisor&quot;
+  for (i in seq_along(speaker)) if (is.na(speaker[i]) &amp;&amp; i &gt; 1) speaker[i] &lt;- speaker[i - 1]
+  sum(str_count(sub(&quot;^(advisee|advisor): &quot;, &quot;&quot;,
+                    lines[!is.na(speaker) &amp; speaker == &quot;advisor&quot;]), &quot;\\S+&quot;))
+}
+cv &lt;- cv %&gt;% rowwise() %&gt;%
+  mutate(advisor_words = advisor_words(chat_transcript),
+         advisor_msgs = sum(startsWith(strsplit(chat_transcript, &quot;\n&quot;)[[1]], &quot;advisor:&quot;))) %&gt;%
+  ungroup()
+
+cv %&gt;% group_by(arm) %&gt;%
+  summarise(n = n(), missing_duration = sum(is.na(chat_duration_mins)),
+            mean_words = mean(advisor_words), sd_words = sd(advisor_words),
+            mean_msgs = mean(advisor_msgs),
+            mean_mins = mean(chat_duration_mins), sd_mins = sd(chat_duration_mins),
+            median_mins = median(chat_duration_mins)) %&gt;% kable(digits = 2)</code></pre>
+<table>
+<colgroup>
+<col width="6%" />
+<col width="4%" />
+<col width="19%" />
+<col width="12%" />
+<col width="10%" />
+<col width="11%" />
+<col width="11%" />
+<col width="9%" />
+<col width="13%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">arm</th>
+<th align="right">n</th>
+<th align="right">missing_duration</th>
+<th align="right">mean_words</th>
+<th align="right">sd_words</th>
+<th align="right">mean_msgs</th>
+<th align="right">mean_mins</th>
+<th align="right">sd_mins</th>
+<th align="right">median_mins</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Human</td>
+<td align="right">149</td>
+<td align="right">0</td>
+<td align="right">64.5</td>
+<td align="right">42.43</td>
+<td align="right">4.88</td>
+<td align="right">5.17</td>
+<td align="right">2.38</td>
+<td align="right">4.62</td>
+</tr>
+<tr class="even">
+<td align="left">LLM</td>
+<td align="right">144</td>
+<td align="right">0</td>
+<td align="right">524.9</td>
+<td align="right">251.96</td>
+<td align="right">5.31</td>
+<td align="right">4.06</td>
+<td align="right">1.32</td>
+<td align="right">3.53</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>t.test(advisor_words ~ arm, cv)</code></pre>
+<pre><code>## 
+##  Welch Two Sample t-test
+## 
+## data:  advisor_words by arm
+## t = -21.633, df = 150.84, p-value &lt; 2.2e-16
+## alternative hypothesis: true difference in means between group Human and group LLM is not equal to 0
+## 95 percent confidence interval:
+##  -502.4496 -418.3488
+## sample estimates:
+## mean in group Human   mean in group LLM 
+##            64.49664           524.89583</code></pre>
+<pre class="r"><code>t.test(chat_duration_mins ~ arm, cv)</code></pre>
+<pre><code>## 
+##  Welch Two Sample t-test
+## 
+## data:  chat_duration_mins by arm
+## t = 4.9515, df = 232.68, p-value = 1.415e-06
+## alternative hypothesis: true difference in means between group Human and group LLM is not equal to 0
+## 95 percent confidence interval:
+##  0.666101 1.546498
+## sample estimates:
+## mean in group Human   mean in group LLM 
+##            5.168568            4.062269</code></pre>
+<pre class="r"><code>wilcox.test(chat_duration_mins ~ arm, cv)</code></pre>
+<pre><code>## 
+##  Wilcoxon rank sum test with continuity correction
+## 
+## data:  chat_duration_mins by arm
+## W = 14193, p-value = 1.762e-06
+## alternative hypothesis: true location shift is not equal to 0</code></pre>
+<div id="post-test-scales" class="section level2">
+<h2>Post-test Scales</h2>
+<pre class="r"><code>pt &lt;- seek %&gt;% filter(condition %in% c(&quot;H_AI&quot;, &quot;H_H_seeker&quot;)) %&gt;%
+  mutate(advice_contradicted_initial_r = 8 - advice_contradicted_initial,
+         advisor_disagreed_r           = 8 - advisor_disagreed)
+post_scales &lt;- list(
+  sycophancy                = c(&quot;advice_aligned_initial&quot;, &quot;advice_contradicted_initial_r&quot;,
+                                &quot;advisor_reassured_initial&quot;, &quot;advisor_disagreed_r&quot;),
+  perceived_trustworthiness = c(&quot;advisor_best_answer&quot;, &quot;advisor_honest&quot;,
+                                &quot;advisor_competent&quot;, &quot;advisor_loyal&quot;),
+  perceived_rationality     = c(&quot;advisor_reasonable_logical&quot;, &quot;advisor_considered_facts&quot;,
+                                &quot;advisor_logical_analysis&quot;, &quot;advisor_rational_objective&quot;))
+for (s in names(post_scales)) {
+  pt[[s]] &lt;- rowMeans(pt[post_scales[[s]]], na.rm = TRUE)
+  m &lt;- cor(pt[post_scales[[s]]], use = &quot;pairwise.complete.obs&quot;)
+  cat(s, &quot;- mean inter-item r:&quot;, round(mean(m[lower.tri(m)]), 2), &quot;\n&quot;)
+}</code></pre>
+<pre><code>## sycophancy - mean inter-item r: 0.49 
+## perceived_trustworthiness - mean inter-item r: 0.69 
+## perceived_rationality - mean inter-item r: 0.82</code></pre>
+<pre class="r"><code>cohen_d &lt;- function(a, b) {
+  a &lt;- a[!is.na(a)]; b &lt;- b[!is.na(b)]
+  (mean(a) - mean(b)) / sqrt(((length(a) - 1) * var(a) + (length(b) - 1) * var(b)) /
+                               (length(a) + length(b) - 2))
+}</code></pre>
+</div>
+<div id="advice-advisor-quality" class="section level2">
+<h2>Advice / advisor quality</h2>
+<pre class="r"><code>quality &lt;- c(names(post_scales), &quot;advice_quality&quot;, &quot;advice_convincing&quot;, &quot;advice_mind_change&quot;,
+             &quot;advisor_manipulative&quot;, &quot;advisor_annoying&quot;, &quot;advisor_exaggerating&quot;,
+             &quot;charity_info_reliable&quot;)
+m_ci &lt;- function(x) {          # &quot;M [lo, hi]&quot; with a 95% CI for the group mean
+  x &lt;- x[!is.na(x)]
+  half &lt;- qt(.975, length(x) - 1) * sd(x) / sqrt(length(x))
+  sprintf(&quot;%.2f [%.2f, %.2f]&quot;, mean(x), mean(x) - half, mean(x) + half)
+}
+qtab &lt;- bind_rows(lapply(quality, function(v) {
+  a &lt;- pt[[v]][pt$condition == &quot;H_AI&quot;]; b &lt;- pt[[v]][pt$condition == &quot;H_H_seeker&quot;]
+  tt &lt;- t.test(a, b)
+  tibble(measure = v, type = if (v %in% names(post_scales)) &quot;scale&quot; else &quot;item&quot;,
+         llm = m_ci(a), human = m_ci(b),
+         d = cohen_d(a, b), t = unname(tt$statistic), df = unname(tt$parameter),
+         p = tt$p.value)
+})) %&gt;%
+  mutate(p_holm = p.adjust(p, &quot;holm&quot;)) %&gt;% arrange(desc(abs(d)))
+qtab %&gt;% kable(digits = c(NA, NA, NA, NA, 2, 2, 1, 5, 5))</code></pre>
+<table>
+<colgroup>
+<col width="25%" />
+<col width="5%" />
+<col width="17%" />
+<col width="17%" />
+<col width="5%" />
+<col width="5%" />
+<col width="5%" />
+<col width="7%" />
+<col width="7%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">measure</th>
+<th align="left">type</th>
+<th align="left">llm</th>
+<th align="left">human</th>
+<th align="right">d</th>
+<th align="right">t</th>
+<th align="right">df</th>
+<th align="right">p</th>
+<th align="right">p_holm</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">perceived_rationality</td>
+<td align="left">scale</td>
+<td align="left">5.82 [5.64, 6.01]</td>
+<td align="left">4.45 [4.18, 4.71]</td>
+<td align="right">0.98</td>
+<td align="right">8.42</td>
+<td align="right">264.1</td>
+<td align="right">0.00000</td>
+<td align="right">0.00000</td>
+</tr>
+<tr class="even">
+<td align="left">perceived_trustworthiness</td>
+<td align="left">scale</td>
+<td align="left">5.64 [5.45, 5.84]</td>
+<td align="left">4.35 [4.10, 4.61]</td>
+<td align="right">0.92</td>
+<td align="right">7.93</td>
+<td align="right">276.2</td>
+<td align="right">0.00000</td>
+<td align="right">0.00000</td>
+</tr>
+<tr class="odd">
+<td align="left">advice_convincing</td>
+<td align="left">item</td>
+<td align="left">5.01 [4.76, 5.27]</td>
+<td align="left">3.45 [3.14, 3.76]</td>
+<td align="right">0.91</td>
+<td align="right">7.79</td>
+<td align="right">283.5</td>
+<td align="right">0.00000</td>
+<td align="right">0.00000</td>
+</tr>
+<tr class="even">
+<td align="left">advice_quality</td>
+<td align="left">item</td>
+<td align="left">3.72 [3.53, 3.90]</td>
+<td align="left">2.63 [2.42, 2.84]</td>
+<td align="right">0.89</td>
+<td align="right">7.64</td>
+<td align="right">288.0</td>
+<td align="right">0.00000</td>
+<td align="right">0.00000</td>
+</tr>
+<tr class="odd">
+<td align="left">charity_info_reliable</td>
+<td align="left">item</td>
+<td align="left">4.59 [4.32, 4.87]</td>
+<td align="left">3.21 [2.90, 3.52]</td>
+<td align="right">0.77</td>
+<td align="right">6.62</td>
+<td align="right">288.4</td>
+<td align="right">0.00000</td>
+<td align="right">0.00000</td>
+</tr>
+<tr class="even">
+<td align="left">sycophancy</td>
+<td align="left">scale</td>
+<td align="left">5.68 [5.47, 5.89]</td>
+<td align="left">4.81 [4.57, 5.04]</td>
+<td align="right">0.63</td>
+<td align="right">5.45</td>
+<td align="right">289.9</td>
+<td align="right">0.00000</td>
+<td align="right">0.00000</td>
+</tr>
+<tr class="odd">
+<td align="left">advisor_annoying</td>
+<td align="left">item</td>
+<td align="left">1.34 [1.21, 1.47]</td>
+<td align="left">1.83 [1.62, 2.03]</td>
+<td align="right">-0.47</td>
+<td align="right">-4.03</td>
+<td align="right">250.4</td>
+<td align="right">0.00007</td>
+<td align="right">0.00030</td>
+</tr>
+<tr class="even">
+<td align="left">advisor_exaggerating</td>
+<td align="left">item</td>
+<td align="left">1.26 [1.17, 1.35]</td>
+<td align="left">1.48 [1.35, 1.61]</td>
+<td align="right">-0.32</td>
+<td align="right">-2.72</td>
+<td align="right">265.0</td>
+<td align="right">0.00697</td>
+<td align="right">0.02091</td>
+</tr>
+<tr class="odd">
+<td align="left">advice_mind_change</td>
+<td align="left">item</td>
+<td align="left">2.92 [2.61, 3.22]</td>
+<td align="left">2.43 [2.14, 2.72]</td>
+<td align="right">0.27</td>
+<td align="right">2.27</td>
+<td align="right">291.2</td>
+<td align="right">0.02377</td>
+<td align="right">0.04755</td>
+</tr>
+<tr class="even">
+<td align="left">advisor_manipulative</td>
+<td align="left">item</td>
+<td align="left">1.41 [1.29, 1.54]</td>
+<td align="left">1.58 [1.41, 1.74]</td>
+<td align="right">-0.18</td>
+<td align="right">-1.56</td>
+<td align="right">275.6</td>
+<td align="right">0.12022</td>
+<td align="right">0.12022</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code># LaTeX version for pasting into Overleaf
+qtab %&gt;%
+  transmute(Measure = sub(&quot;^(.)&quot;, &quot;\\U\\1&quot;, gsub(&quot;_&quot;, &quot; &quot;, measure), perl = TRUE),
+            `LLM $M$ [95\\% CI]` = llm, `Human $M$ [95\\% CI]` = human,
+            `$d$` = sprintf(&quot;%.2f&quot;, d),
+            `$p_{\\mathrm{Holm}}$` = ifelse(p_holm &lt; .001, &quot;$&lt;.001$&quot;, sprintf(&quot;%.3f&quot;, p_holm))) %&gt;%
+  kable(format = &quot;latex&quot;, booktabs = TRUE, escape = FALSE, align = &quot;lccrr&quot;,
+        caption = &quot;Advice and advisor quality by advisor type (Cohen&#39;s d, LLM minus human; Holm-corrected p within this family).&quot;,
+        label = &quot;advisor_quality&quot;) %&gt;%
+  writeLines(file.path(out_dir, &quot;advisor_quality_table.tex&quot;))
+cat(&quot;LaTeX table -&gt;&quot;, file.path(out_dir, &quot;advisor_quality_table.tex&quot;), &quot;\n&quot;)</code></pre>
+<pre><code>## LaTeX table -&gt; main_analysis_files/advisor_quality_table.tex</code></pre>
+</div>
+<div id="correlations-among-the-quality-measures"
+class="section level2">
+<h2>Correlations among the quality measures</h2>
+<pre class="r"><code>qlabs &lt;- c(sycophancy = &quot;Sycophancy&quot;, perceived_rationality = &quot;Rationality&quot;,
+           perceived_trustworthiness = &quot;Trustworthiness&quot;, advice_convincing = &quot;Convincing&quot;,
+           advice_quality = &quot;Quality&quot;, charity_info_reliable = &quot;Reliable info&quot;,
+           advisor_annoying = &quot;Annoyed&quot;, advisor_exaggerating = &quot;Exaggerating&quot;,
+           advice_mind_change = &quot;Mind change&quot;, advisor_manipulative = &quot;Manipulative&quot;)
+stars &lt;- function(p) as.character(cut(p, c(-1, .001, .01, .05, 1),
+                                      labels = c(&quot;***&quot;, &quot;**&quot;, &quot;*&quot;, &quot;&quot;)))
+cor_mat &lt;- function(cond) {
+  X &lt;- pt[pt$condition == cond, names(qlabs)]
+  n &lt;- length(qlabs)
+  M &lt;- matrix(&quot;&quot;, n, n, dimnames = list(unname(qlabs), unname(qlabs)))
+  for (i in 2:n) for (j in 1:(i - 1)) {
+    ct &lt;- cor.test(X[[i]], X[[j]])
+    M[i, j] &lt;- paste0(sprintf(&quot;%.2f&quot;, ct$estimate), stars(ct$p.value))
+  }
+  M[, -n]   # all rows (1..k), lower triangle
+}
+kable(cor_mat(&quot;H_AI&quot;), caption = &quot;LLM advisor arm. * p&lt;.05, ** p&lt;.01, *** p&lt;.001 (uncorrected)&quot;)</code></pre>
+<table>
+<caption>LLM advisor arm. * p&lt;.05, ** p&lt;.01, *** p&lt;.001
+(uncorrected)</caption>
+<colgroup>
+<col width="13%" />
+<col width="9%" />
+<col width="9%" />
+<col width="13%" />
+<col width="9%" />
+<col width="7%" />
+<col width="11%" />
+<col width="6%" />
+<col width="10%" />
+<col width="9%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left"></th>
+<th align="left">Sycophancy</th>
+<th align="left">Rationality</th>
+<th align="left">Trustworthiness</th>
+<th align="left">Convincing</th>
+<th align="left">Quality</th>
+<th align="left">Reliable info</th>
+<th align="left">Annoyed</th>
+<th align="left">Exaggerating</th>
+<th align="left">Mind change</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Sycophancy</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">Rationality</td>
+<td align="left">0.11</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">Trustworthiness</td>
+<td align="left">0.22**</td>
+<td align="left">0.80***</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">Convincing</td>
+<td align="left">0.11</td>
+<td align="left">0.52***</td>
+<td align="left">0.53***</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">Quality</td>
+<td align="left">0.25**</td>
+<td align="left">0.63***</td>
+<td align="left">0.76***</td>
+<td align="left">0.55***</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">Reliable info</td>
+<td align="left">0.05</td>
+<td align="left">0.39***</td>
+<td align="left">0.42***</td>
+<td align="left">0.58***</td>
+<td align="left">0.40***</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">Annoyed</td>
+<td align="left">-0.18*</td>
+<td align="left">-0.47***</td>
+<td align="left">-0.58***</td>
+<td align="left">-0.36***</td>
+<td align="left">-0.52***</td>
+<td align="left">-0.29***</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">Exaggerating</td>
+<td align="left">-0.35***</td>
+<td align="left">-0.32***</td>
+<td align="left">-0.37***</td>
+<td align="left">-0.24**</td>
+<td align="left">-0.21*</td>
+<td align="left">-0.05</td>
+<td align="left">0.46***</td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">Mind change</td>
+<td align="left">-0.14</td>
+<td align="left">0.16</td>
+<td align="left">0.17*</td>
+<td align="left">0.35***</td>
+<td align="left">0.31***</td>
+<td align="left">0.21*</td>
+<td align="left">-0.14</td>
+<td align="left">0.07</td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">Manipulative</td>
+<td align="left">-0.41***</td>
+<td align="left">-0.40***</td>
+<td align="left">-0.49***</td>
+<td align="left">-0.28***</td>
+<td align="left">-0.31***</td>
+<td align="left">-0.11</td>
+<td align="left">0.53***</td>
+<td align="left">0.69***</td>
+<td align="left">0.07</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>kable(cor_mat(&quot;H_H_seeker&quot;), caption = &quot;Human advisor arm. * p&lt;.05, ** p&lt;.01, *** p&lt;.001 (uncorrected)&quot;)</code></pre>
+<table>
+<caption>Human advisor arm. * p&lt;.05, ** p&lt;.01, *** p&lt;.001
+(uncorrected)</caption>
+<colgroup>
+<col width="13%" />
+<col width="9%" />
+<col width="9%" />
+<col width="13%" />
+<col width="9%" />
+<col width="7%" />
+<col width="11%" />
+<col width="6%" />
+<col width="10%" />
+<col width="9%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left"></th>
+<th align="left">Sycophancy</th>
+<th align="left">Rationality</th>
+<th align="left">Trustworthiness</th>
+<th align="left">Convincing</th>
+<th align="left">Quality</th>
+<th align="left">Reliable info</th>
+<th align="left">Annoyed</th>
+<th align="left">Exaggerating</th>
+<th align="left">Mind change</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Sycophancy</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">Rationality</td>
+<td align="left">0.27***</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">Trustworthiness</td>
+<td align="left">0.38***</td>
+<td align="left">0.84***</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">Convincing</td>
+<td align="left">0.32***</td>
+<td align="left">0.71***</td>
+<td align="left">0.74***</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">Quality</td>
+<td align="left">0.32***</td>
+<td align="left">0.67***</td>
+<td align="left">0.77***</td>
+<td align="left">0.64***</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">Reliable info</td>
+<td align="left">0.16</td>
+<td align="left">0.54***</td>
+<td align="left">0.59***</td>
+<td align="left">0.69***</td>
+<td align="left">0.50***</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">Annoyed</td>
+<td align="left">-0.30***</td>
+<td align="left">-0.52***</td>
+<td align="left">-0.58***</td>
+<td align="left">-0.44***</td>
+<td align="left">-0.51***</td>
+<td align="left">-0.33***</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">Exaggerating</td>
+<td align="left">-0.27***</td>
+<td align="left">-0.18*</td>
+<td align="left">-0.15</td>
+<td align="left">-0.17*</td>
+<td align="left">-0.23**</td>
+<td align="left">-0.08</td>
+<td align="left">0.40***</td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">Mind change</td>
+<td align="left">0.02</td>
+<td align="left">0.36***</td>
+<td align="left">0.42***</td>
+<td align="left">0.50***</td>
+<td align="left">0.41***</td>
+<td align="left">0.32***</td>
+<td align="left">-0.22**</td>
+<td align="left">-0.04</td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">Manipulative</td>
+<td align="left">-0.40***</td>
+<td align="left">-0.04</td>
+<td align="left">-0.16</td>
+<td align="left">-0.14</td>
+<td align="left">-0.17*</td>
+<td align="left">-0.08</td>
+<td align="left">0.39***</td>
+<td align="left">0.63***</td>
+<td align="left">-0.08</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code># LaTeX export of both matrices (same variable order as the quality table)
+latex_cor &lt;- function(cond, caption, label) {
+  M &lt;- cor_mat(cond)
+  rownames(M) &lt;- sprintf(&quot;%d. %s&quot;, seq_len(nrow(M)), rownames(M))
+  colnames(M) &lt;- as.character(seq_len(ncol(M)))
+  kable(M, format = &quot;latex&quot;, booktabs = TRUE, align = rep(&quot;r&quot;, ncol(M)),
+        caption = paste(caption, &quot;* p&lt;.05, ** p&lt;.01, *** p&lt;.001 (uncorrected).&quot;),
+        label = label)
+}
+writeLines(c(latex_cor(&quot;H_AI&quot;, &quot;Correlations, LLM advisor arm.&quot;, &quot;cor_llm&quot;), &quot;&quot;,
+             latex_cor(&quot;H_H_seeker&quot;, &quot;Correlations, human advisor arm.&quot;, &quot;cor_human&quot;)),
+           file.path(out_dir, &quot;correlation_tables.tex&quot;))
+cat(&quot;LaTeX tables -&gt;&quot;, file.path(out_dir, &quot;correlation_tables.tex&quot;), &quot;\n&quot;)</code></pre>
+<pre><code>## LaTeX tables -&gt; main_analysis_files/correlation_tables.tex</code></pre>
+</div>
+<div id="do-the-correlations-differ-between-advisor-types"
+class="section level2">
+<h2>Do the correlations differ between advisor types?</h2>
+<pre class="r"><code>cor_diff &lt;- bind_rows(lapply(combn(names(qlabs), 2, simplify = FALSE), function(pr) {
+  r_arm &lt;- function(cond) {
+    X &lt;- pt[pt$condition == cond, pr]; X &lt;- X[complete.cases(X), ]
+    c(r = cor(X[[1]], X[[2]]), n = nrow(X))
+  }
+  a &lt;- r_arm(&quot;H_AI&quot;); b &lt;- r_arm(&quot;H_H_seeker&quot;)
+  z &lt;- (atanh(a[&quot;r&quot;]) - atanh(b[&quot;r&quot;])) / sqrt(1 / (a[&quot;n&quot;] - 3) + 1 / (b[&quot;n&quot;] - 3))
+  tibble(measure_1 = qlabs[pr[1]], measure_2 = qlabs[pr[2]],
+         r_llm = a[&quot;r&quot;], n_llm = a[&quot;n&quot;], r_human = b[&quot;r&quot;], n_human = b[&quot;n&quot;],
+         z = z, p = 2 * pnorm(-abs(z)))
+})) %&gt;% mutate(p_holm = p.adjust(p, &quot;holm&quot;)) %&gt;% arrange(p)
+cor_diff %&gt;% kable(digits = c(NA, NA, 2, 0, 2, 0, 2, 4, 4))</code></pre>
+<table>
+<colgroup>
+<col width="20%" />
+<col width="20%" />
+<col width="7%" />
+<col width="7%" />
+<col width="10%" />
+<col width="10%" />
+<col width="7%" />
+<col width="8%" />
+<col width="8%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">measure_1</th>
+<th align="left">measure_2</th>
+<th align="right">r_llm</th>
+<th align="right">n_llm</th>
+<th align="right">r_human</th>
+<th align="right">n_human</th>
+<th align="right">z</th>
+<th align="right">p</th>
+<th align="right">p_holm</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Rationality</td>
+<td align="left">Manipulative</td>
+<td align="right">-0.40</td>
+<td align="right">145</td>
+<td align="right">-0.04</td>
+<td align="right">149</td>
+<td align="right">-3.33</td>
+<td align="right">0.0009</td>
+<td align="right">0.0392</td>
+</tr>
+<tr class="even">
+<td align="left">Trustworthiness</td>
+<td align="left">Manipulative</td>
+<td align="right">-0.49</td>
+<td align="right">145</td>
+<td align="right">-0.16</td>
+<td align="right">149</td>
+<td align="right">-3.19</td>
+<td align="right">0.0014</td>
+<td align="right">0.0633</td>
+</tr>
+<tr class="odd">
+<td align="left">Trustworthiness</td>
+<td align="left">Convincing</td>
+<td align="right">0.53</td>
+<td align="right">145</td>
+<td align="right">0.74</td>
+<td align="right">149</td>
+<td align="right">-3.04</td>
+<td align="right">0.0023</td>
+<td align="right">0.1002</td>
+</tr>
+<tr class="even">
+<td align="left">Rationality</td>
+<td align="left">Convincing</td>
+<td align="right">0.52</td>
+<td align="right">145</td>
+<td align="right">0.71</td>
+<td align="right">149</td>
+<td align="right">-2.61</td>
+<td align="right">0.0091</td>
+<td align="right">0.3821</td>
+</tr>
+<tr class="odd">
+<td align="left">Trustworthiness</td>
+<td align="left">Mind change</td>
+<td align="right">0.17</td>
+<td align="right">145</td>
+<td align="right">0.42</td>
+<td align="right">149</td>
+<td align="right">-2.31</td>
+<td align="right">0.0206</td>
+<td align="right">0.8458</td>
+</tr>
+<tr class="even">
+<td align="left">Trustworthiness</td>
+<td align="left">Exaggerating</td>
+<td align="right">-0.37</td>
+<td align="right">145</td>
+<td align="right">-0.15</td>
+<td align="right">149</td>
+<td align="right">-2.04</td>
+<td align="right">0.0409</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Trustworthiness</td>
+<td align="left">Reliable info</td>
+<td align="right">0.42</td>
+<td align="right">145</td>
+<td align="right">0.59</td>
+<td align="right">149</td>
+<td align="right">-1.93</td>
+<td align="right">0.0532</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Sycophancy</td>
+<td align="left">Convincing</td>
+<td align="right">0.11</td>
+<td align="right">145</td>
+<td align="right">0.32</td>
+<td align="right">149</td>
+<td align="right">-1.90</td>
+<td align="right">0.0571</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Rationality</td>
+<td align="left">Mind change</td>
+<td align="right">0.16</td>
+<td align="right">145</td>
+<td align="right">0.36</td>
+<td align="right">149</td>
+<td align="right">-1.81</td>
+<td align="right">0.0702</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Rationality</td>
+<td align="left">Reliable info</td>
+<td align="right">0.39</td>
+<td align="right">145</td>
+<td align="right">0.54</td>
+<td align="right">149</td>
+<td align="right">-1.65</td>
+<td align="right">0.0998</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Convincing</td>
+<td align="left">Reliable info</td>
+<td align="right">0.58</td>
+<td align="right">145</td>
+<td align="right">0.69</td>
+<td align="right">149</td>
+<td align="right">-1.55</td>
+<td align="right">0.1202</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Sycophancy</td>
+<td align="left">Trustworthiness</td>
+<td align="right">0.22</td>
+<td align="right">145</td>
+<td align="right">0.38</td>
+<td align="right">149</td>
+<td align="right">-1.55</td>
+<td align="right">0.1219</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Annoyed</td>
+<td align="left">Manipulative</td>
+<td align="right">0.53</td>
+<td align="right">145</td>
+<td align="right">0.39</td>
+<td align="right">149</td>
+<td align="right">1.52</td>
+<td align="right">0.1273</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Convincing</td>
+<td align="left">Mind change</td>
+<td align="right">0.35</td>
+<td align="right">145</td>
+<td align="right">0.50</td>
+<td align="right">149</td>
+<td align="right">-1.49</td>
+<td align="right">0.1360</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Sycophancy</td>
+<td align="left">Rationality</td>
+<td align="right">0.11</td>
+<td align="right">145</td>
+<td align="right">0.27</td>
+<td align="right">149</td>
+<td align="right">-1.42</td>
+<td align="right">0.1564</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Sycophancy</td>
+<td align="left">Mind change</td>
+<td align="right">-0.14</td>
+<td align="right">145</td>
+<td align="right">0.02</td>
+<td align="right">149</td>
+<td align="right">-1.39</td>
+<td align="right">0.1637</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Rationality</td>
+<td align="left">Exaggerating</td>
+<td align="right">-0.32</td>
+<td align="right">145</td>
+<td align="right">-0.18</td>
+<td align="right">149</td>
+<td align="right">-1.33</td>
+<td align="right">0.1847</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Mind change</td>
+<td align="left">Manipulative</td>
+<td align="right">0.07</td>
+<td align="right">145</td>
+<td align="right">-0.08</td>
+<td align="right">149</td>
+<td align="right">1.30</td>
+<td align="right">0.1933</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Convincing</td>
+<td align="left">Manipulative</td>
+<td align="right">-0.28</td>
+<td align="right">145</td>
+<td align="right">-0.14</td>
+<td align="right">149</td>
+<td align="right">-1.25</td>
+<td align="right">0.2123</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Quality</td>
+<td align="left">Manipulative</td>
+<td align="right">-0.31</td>
+<td align="right">145</td>
+<td align="right">-0.17</td>
+<td align="right">149</td>
+<td align="right">-1.24</td>
+<td align="right">0.2132</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Convincing</td>
+<td align="left">Quality</td>
+<td align="right">0.55</td>
+<td align="right">145</td>
+<td align="right">0.64</td>
+<td align="right">149</td>
+<td align="right">-1.24</td>
+<td align="right">0.2141</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Quality</td>
+<td align="left">Reliable info</td>
+<td align="right">0.40</td>
+<td align="right">145</td>
+<td align="right">0.50</td>
+<td align="right">149</td>
+<td align="right">-1.07</td>
+<td align="right">0.2840</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Sycophancy</td>
+<td align="left">Annoyed</td>
+<td align="right">-0.18</td>
+<td align="right">145</td>
+<td align="right">-0.30</td>
+<td align="right">149</td>
+<td align="right">1.06</td>
+<td align="right">0.2877</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Reliable info</td>
+<td align="left">Mind change</td>
+<td align="right">0.21</td>
+<td align="right">145</td>
+<td align="right">0.32</td>
+<td align="right">149</td>
+<td align="right">-1.03</td>
+<td align="right">0.3018</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Quality</td>
+<td align="left">Mind change</td>
+<td align="right">0.31</td>
+<td align="right">145</td>
+<td align="right">0.41</td>
+<td align="right">149</td>
+<td align="right">-0.97</td>
+<td align="right">0.3324</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Exaggerating</td>
+<td align="left">Manipulative</td>
+<td align="right">0.69</td>
+<td align="right">145</td>
+<td align="right">0.63</td>
+<td align="right">149</td>
+<td align="right">0.95</td>
+<td align="right">0.3433</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Exaggerating</td>
+<td align="left">Mind change</td>
+<td align="right">0.07</td>
+<td align="right">145</td>
+<td align="right">-0.04</td>
+<td align="right">149</td>
+<td align="right">0.93</td>
+<td align="right">0.3505</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Sycophancy</td>
+<td align="left">Reliable info</td>
+<td align="right">0.05</td>
+<td align="right">145</td>
+<td align="right">0.16</td>
+<td align="right">149</td>
+<td align="right">-0.93</td>
+<td align="right">0.3520</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Rationality</td>
+<td align="left">Trustworthiness</td>
+<td align="right">0.80</td>
+<td align="right">145</td>
+<td align="right">0.84</td>
+<td align="right">149</td>
+<td align="right">-0.90</td>
+<td align="right">0.3657</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Sycophancy</td>
+<td align="left">Exaggerating</td>
+<td align="right">-0.35</td>
+<td align="right">145</td>
+<td align="right">-0.27</td>
+<td align="right">149</td>
+<td align="right">-0.76</td>
+<td align="right">0.4497</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Convincing</td>
+<td align="left">Annoyed</td>
+<td align="right">-0.36</td>
+<td align="right">145</td>
+<td align="right">-0.44</td>
+<td align="right">149</td>
+<td align="right">0.75</td>
+<td align="right">0.4506</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Annoyed</td>
+<td align="left">Mind change</td>
+<td align="right">-0.14</td>
+<td align="right">145</td>
+<td align="right">-0.22</td>
+<td align="right">149</td>
+<td align="right">0.71</td>
+<td align="right">0.4769</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Sycophancy</td>
+<td align="left">Quality</td>
+<td align="right">0.25</td>
+<td align="right">145</td>
+<td align="right">0.32</td>
+<td align="right">149</td>
+<td align="right">-0.63</td>
+<td align="right">0.5284</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Convincing</td>
+<td align="left">Exaggerating</td>
+<td align="right">-0.24</td>
+<td align="right">145</td>
+<td align="right">-0.17</td>
+<td align="right">149</td>
+<td align="right">-0.61</td>
+<td align="right">0.5387</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Rationality</td>
+<td align="left">Annoyed</td>
+<td align="right">-0.47</td>
+<td align="right">145</td>
+<td align="right">-0.52</td>
+<td align="right">149</td>
+<td align="right">0.61</td>
+<td align="right">0.5421</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Annoyed</td>
+<td align="left">Exaggerating</td>
+<td align="right">0.46</td>
+<td align="right">145</td>
+<td align="right">0.40</td>
+<td align="right">149</td>
+<td align="right">0.60</td>
+<td align="right">0.5458</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Rationality</td>
+<td align="left">Quality</td>
+<td align="right">0.63</td>
+<td align="right">145</td>
+<td align="right">0.67</td>
+<td align="right">149</td>
+<td align="right">-0.60</td>
+<td align="right">0.5500</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Reliable info</td>
+<td align="left">Annoyed</td>
+<td align="right">-0.29</td>
+<td align="right">145</td>
+<td align="right">-0.33</td>
+<td align="right">149</td>
+<td align="right">0.37</td>
+<td align="right">0.7090</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Reliable info</td>
+<td align="left">Manipulative</td>
+<td align="right">-0.11</td>
+<td align="right">145</td>
+<td align="right">-0.08</td>
+<td align="right">149</td>
+<td align="right">-0.30</td>
+<td align="right">0.7610</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Reliable info</td>
+<td align="left">Exaggerating</td>
+<td align="right">-0.05</td>
+<td align="right">145</td>
+<td align="right">-0.08</td>
+<td align="right">149</td>
+<td align="right">0.29</td>
+<td align="right">0.7694</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Quality</td>
+<td align="left">Exaggerating</td>
+<td align="right">-0.21</td>
+<td align="right">145</td>
+<td align="right">-0.23</td>
+<td align="right">149</td>
+<td align="right">0.20</td>
+<td align="right">0.8385</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Trustworthiness</td>
+<td align="left">Quality</td>
+<td align="right">0.76</td>
+<td align="right">145</td>
+<td align="right">0.77</td>
+<td align="right">149</td>
+<td align="right">-0.15</td>
+<td align="right">0.8844</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Quality</td>
+<td align="left">Annoyed</td>
+<td align="right">-0.52</td>
+<td align="right">145</td>
+<td align="right">-0.51</td>
+<td align="right">149</td>
+<td align="right">-0.12</td>
+<td align="right">0.9061</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="even">
+<td align="left">Sycophancy</td>
+<td align="left">Manipulative</td>
+<td align="right">-0.41</td>
+<td align="right">145</td>
+<td align="right">-0.40</td>
+<td align="right">149</td>
+<td align="right">-0.08</td>
+<td align="right">0.9389</td>
+<td align="right">1.0000</td>
+</tr>
+<tr class="odd">
+<td align="left">Trustworthiness</td>
+<td align="left">Annoyed</td>
+<td align="right">-0.58</td>
+<td align="right">145</td>
+<td align="right">-0.58</td>
+<td align="right">149</td>
+<td align="right">0.01</td>
+<td align="right">0.9923</td>
+<td align="right">1.0000</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code># LaTeX version: same matrix layout as the per-arm correlation tables; cells
+# show the LLM - human difference on the correlation scale (Fisher z
+# transform, subtract, back-transform: tanh(z_LLM - z_Human)), stars from the
+# two-sample z-test (uncorrected, matching the per-arm tables)
+nq &lt;- length(qlabs)
+Md &lt;- matrix(&quot;&quot;, nq, nq, dimnames = list(unname(qlabs), unname(qlabs)))
+for (i in 2:nq) for (j in 1:(i - 1)) {
+  row &lt;- cor_diff %&gt;%
+    filter(measure_1 == qlabs[j], measure_2 == qlabs[i])
+  Md[i, j] &lt;- paste0(sprintf(&quot;%.2f&quot;, tanh(atanh(row$r_llm) - atanh(row$r_human))),
+                     stars(row$p))
+}
+Md &lt;- Md[, -nq]
+rownames(Md) &lt;- sprintf(&quot;%d. %s&quot;, seq_len(nrow(Md)), rownames(Md))
+colnames(Md) &lt;- as.character(seq_len(ncol(Md)))
+kable(Md, format = &quot;latex&quot;, booktabs = TRUE, align = rep(&quot;r&quot;, ncol(Md)),
+      caption = paste(&quot;Difference between the LLM- and human-advisor-arm&quot;,
+                      &quot;correlations, on the correlation scale (Fisher&quot;,
+                      &quot;z-transformed, subtracted, back-transformed; positive =&quot;,
+                      &quot;stronger in the LLM arm). Stars from the two-sample&quot;,
+                      &quot;z-test: * p&lt;.05, ** p&lt;.01, *** p&lt;.001 (uncorrected).&quot;,
+                      &quot;Only the Rationality--Manipulative difference remains&quot;,
+                      &quot;significant after Holm correction across all 45 pairs&quot;,
+                      &quot;($p_{\\mathrm{Holm}} = .039$).&quot;),
+      label = &quot;cor_diff&quot;) %&gt;%
+  writeLines(file.path(out_dir, &quot;correlation_differences_table.tex&quot;))
+cat(&quot;LaTeX table -&gt;&quot;, file.path(out_dir, &quot;correlation_differences_table.tex&quot;), &quot;\n&quot;)</code></pre>
+<pre><code>## LaTeX table -&gt; main_analysis_files/correlation_differences_table.tex</code></pre>
+</div>
+</div>
+<div id="figures" class="section level1">
+<h1>Figures</h1>
+<pre class="r"><code>library(ggplot2); library(ggdist)</code></pre>
+<pre><code>## Warning: package &#39;ggplot2&#39; was built under R version 4.5.3</code></pre>
+<pre class="r"><code>COL &lt;- c(&quot;LLM Advisor&quot; = &quot;#0072B2&quot;, &quot;Human Advisor&quot; = &quot;#E69F00&quot;, &quot;No Advice&quot; = &quot;#999999&quot;)
+theme_don &lt;- theme_minimal(base_size = 12) +
+  theme(plot.title = element_text(face = &quot;bold&quot;, colour = &quot;#1A1E26&quot;),
+        plot.subtitle = element_text(colour = &quot;#6B7078&quot;, size = 9.5),
+        axis.title = element_text(colour = &quot;#6B7078&quot;, size = 10),
+        axis.text = element_text(colour = &quot;#6B7078&quot;, size = 9),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_line(colour = &quot;#D8D9D3&quot;, linewidth = 0.25),
+        legend.position = &quot;none&quot;)
+fig &lt;- seek %&gt;%
+  filter(!is.na(final_donation_amount)) %&gt;%
+  mutate(arm = factor(recode(condition, H_AI = &quot;LLM Advisor&quot;,
+                             H_H_seeker = &quot;Human Advisor&quot;, H_control = &quot;No Advice&quot;),
+                      levels = names(COL)),
+         shift = final_donation_amount - initial_donation_amount)</code></pre>
+<div id="donation-decisions-by-condition-raincloud"
+class="section level2">
+<h2>Donation decisions by condition (raincloud)</h2>
+<pre class="r"><code>p_rain &lt;- ggplot(fig, aes(arm, final_donation_amount, colour = arm, fill = arm)) +
+  stat_halfeye(adjust = 0.8, width = 0.55, justification = -0.32, .width = 0,
+               point_colour = NA, alpha = 0.55, normalize = &quot;groups&quot;) +
+  geom_boxplot(width = 0.11, outlier.shape = NA, alpha = 0.35, linewidth = 0.45) +
+  geom_jitter(aes(x = as.numeric(arm) - 0.22), width = 0.07, height = 0,
+              size = 1.2, alpha = 0.35, shape = 16) +
+  scale_colour_manual(values = COL) + scale_fill_manual(values = COL) +
+  # the payout maximum is 97: cut the axis there so the density smoothing does
+  # not suggest donations above the possible range
+  scale_y_continuous(breaks = c(0, 25, 50, 75, 97)) +
+  coord_cartesian(ylim = c(NA, 97)) +
+  labs(title = &quot;Final Donation by Condition&quot;,
+       subtitle = &quot;Cloud: distribution - box: median and quartiles - rain: individual decisions&quot;,
+       x = NULL, y = &quot;Final Donation (£)&quot;) +
+  theme_don
+p_rain</code></pre>
+<p><img src="main_analysis_files/figure-html/fig-raincloud-1.png" width="720" /></p>
+</div>
+<div id="change-in-donation-by-advisor-type" class="section level2">
+<h2>Change in donation by advisor type</h2>
+<pre class="r"><code>hd &lt;- filter(fig, arm != &quot;No Advice&quot;, !is.na(shift))
+# values outside the +/-50 display window, dropped from the histogram
+hd %&gt;% filter(abs(shift) &gt; 50) %&gt;% group_by(arm) %&gt;%
+  summarise(n = n(), values = paste(sort(shift), collapse = &quot;, &quot;)) %&gt;% kable()</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">arm</th>
+<th align="right">n</th>
+<th align="left">values</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">LLM Advisor</td>
+<td align="right">2</td>
+<td align="left">-96, -73</td>
+</tr>
+<tr class="even">
+<td align="left">Human Advisor</td>
+<td align="right">3</td>
+<td align="left">-97, -56, 72</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>p_hist &lt;- ggplot(filter(hd, abs(shift) &lt;= 50), aes(shift, fill = arm)) +
+  geom_histogram(binwidth = 2, position = &quot;identity&quot;, alpha = 0.55, colour = &quot;white&quot;,
+                 linewidth = 0.2, boundary = 0) +
+  geom_vline(xintercept = 0, colour = &quot;#6B7078&quot;, linetype = &quot;22&quot;) +
+  scale_fill_manual(values = COL) +
+  scale_x_continuous(breaks = seq(-50, 50, 10), limits = c(-55, 55)) +
+  labs(title = &quot;Final Minus Initial Donation, by Advisor Type&quot;,
+       subtitle = &quot;Overlapping histograms; bars at 0 are participants who did not revise&quot;,
+       x = &quot;Final - Initial Donation (£)&quot;, y = &quot;Participants&quot;, fill = NULL,
+       caption = sprintf(&quot;%d participants with |change| &gt; £50 not shown&quot;, sum(abs(hd$shift) &gt; 50))) +
+  theme_don + theme(legend.position = &quot;top&quot;,
+                    plot.caption = element_text(colour = &quot;#6B7078&quot;, size = 8.5, hjust = 0))
+p_hist</code></pre>
+<pre><code>## Warning: Removed 4 rows containing missing values or values outside the scale range
+## (`geom_bar()`).</code></pre>
+<p><img src="main_analysis_files/figure-html/fig-shift-hist-1.png" width="720" /></p>
+</div>
+<div id="joint-model-does-the-advice-matter-beyond-the-initial-donation"
+class="section level2">
+<h2>Joint model: does the advice matter beyond the initial
+donation?</h2>
+</div>
+<div id="combined-three-panel-figure" class="section level2">
+<h2>Combined three-panel figure</h2>
+<pre class="r"><code>library(patchwork)</code></pre>
+<pre><code>## Warning: package &#39;patchwork&#39; was built under R version 4.5.3</code></pre>
+<pre class="r"><code>p3 &lt;- ((p_rain + labs(title = &quot;A) Final Donation by Condition&quot;, subtitle = NULL)) |
+  (p_hist + labs(title = &quot;B) Change in Donation&quot;, subtitle = NULL, caption = NULL))) &amp;
+  theme(plot.title  = element_text(size = 20),
+        axis.title  = element_text(size = 17),
+        axis.text   = element_text(size = 15),
+        legend.text = element_text(size = 16))
+p3</code></pre>
+<pre><code>## Warning: Removed 4 rows containing missing values or values outside the scale range
+## (`geom_bar()`).</code></pre>
+<p><img src="main_analysis_files/figure-html/fig-three-panel-1.png" width="1440" /></p>
+<pre class="r"><code>ggsave(file.path(out_dir, &quot;figure_donations.png&quot;), p3, width = 15, height = 6, dpi = 300)</code></pre>
+<pre><code>## Warning: Removed 4 rows containing missing values or values outside the scale range
+## (`geom_bar()`).</code></pre>
+<pre class="r"><code>try(ggsave(file.path(out_dir, &quot;figure_donations.pdf&quot;), p3, width = 15, height = 6))  # fails if the pdf is open</code></pre>
+<pre><code>## Warning: Removed 4 rows containing missing values or values outside the scale range
+## (`geom_bar()`).</code></pre>
+</div>
+<div id="pairwise-relationships-among-the-quality-measures"
+class="section level2">
+<h2>Pairwise relationships among the quality measures</h2>
+<pre class="r"><code>library(GGally)
+pv &lt;- c(&quot;sycophancy&quot;, &quot;perceived_rationality&quot;, &quot;perceived_trustworthiness&quot;,
+        &quot;advice_convincing&quot;, &quot;advice_quality&quot;, &quot;advisor_manipulative&quot;)
+pp &lt;- pt %&gt;%
+  mutate(arm = factor(ifelse(condition == &quot;H_AI&quot;, &quot;LLM Advisor&quot;, &quot;Human Advisor&quot;),
+                      levels = c(&quot;LLM Advisor&quot;, &quot;Human Advisor&quot;))) %&gt;%
+  select(all_of(pv), arm)
+p_pairs &lt;- ggpairs(pp, columns = seq_along(pv), columnLabels = unname(qlabs[pv]),
+                   mapping = aes(colour = arm, fill = arm),
+                   upper = list(continuous = wrap(&quot;cor&quot;, size = 3.4)),
+                   lower = list(continuous = wrap(&quot;points&quot;, size = 1, alpha = 0.3)),
+                   diag  = list(continuous = wrap(&quot;densityDiag&quot;, alpha = 0.5)),
+                   legend = c(1, 1)) +
+  scale_colour_manual(values = COL) + scale_fill_manual(values = COL) +
+  theme_don + theme(legend.position = &quot;top&quot;)
+p_pairs</code></pre>
+<p><img src="main_analysis_files/figure-html/fig-quality-pairs-1.png" width="1248" /></p>
+<pre class="r"><code>ggsave(file.path(out_dir, &quot;figure_quality_pairs.png&quot;), p_pairs, width = 13, height = 11, dpi = 200)</code></pre>
+</div>
+</div>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

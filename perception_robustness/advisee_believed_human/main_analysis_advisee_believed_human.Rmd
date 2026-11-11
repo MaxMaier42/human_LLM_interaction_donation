@@ -1,0 +1,532 @@
+---
+title: "Donation experiment - perception robustness (advisees who believed their human advisor was human)"
+output: html_document
+---
+
+Robustness copy of the main analysis. The Human Advice arm is restricted to
+advisees who reported believing their chat partner was a human
+(`perceived_partner_type == FALSE`); the LLM Advice arm is unchanged (all of
+its advisees correctly believed they chatted with an LLM), and the No Advice
+control (no chat partner) is retained in full. Human advisors' own beliefs
+are not used here (see the dyads_believed_human version for that).
+
+```{r setup, message=FALSE, warning=FALSE}
+library(dplyr); library(tidyr); library(afex); library(emmeans); library(broom); library(knitr)
+d <- read.csv("../../main_data.csv", na.strings = c("NA", "")) %>% filter(!is.na(condition))
+
+# duplicate-answer participants are removed upstream by process_data_short.R
+stopifnot("DUPLICATE flags in data - rerun processing" =
+            !any(sapply(d, function(x) any(grepl("^DUPLICATE\\[", x)))))
+
+##remove participants without match
+d <- subset(d, completion_code != "C17HW55D")
+
+## ROBUSTNESS SUBSET: Human Advice advisees kept only if they believed their
+## partner was human
+d <- d %>% filter(condition != "H_H_seeker" | !perceived_partner_type)
+d %>% count(condition) %>% kable()
+
+##subset to the three advice seeking conditions
+seek <- d %>% filter(condition %in% c("H_AI", "H_control", "H_H_seeker"))  # decision-makers
+```
+
+# Descriptives
+
+```{r descriptives}
+seek %>% group_by(condition) %>%
+  summarise(n = n(), initial = mean(initial_donation_amount, na.rm = TRUE),
+            final = mean(final_donation_amount, na.rm = TRUE),
+            confidence = mean(decision_confidence, na.rm = TRUE)) %>%
+  kable(digits = 1)
+```
+
+# Sample demographics
+
+Full analysed sample (decision-makers and advisors).
+
+```{r sample-demographics}
+d %>% summarise(n = n(),
+                age_mean = mean(age, na.rm = TRUE), age_sd = sd(age, na.rm = TRUE),
+                age_min = min(age, na.rm = TRUE), age_max = max(age, na.rm = TRUE),
+                age_missing = sum(is.na(age)))
+d %>% count(sex) %>% mutate(percent = round(100 * n / sum(n), 1)) 
+d %>% count(condition, sex) %>% group_by(condition) %>%
+  mutate(percent = round(100 * n / sum(n), 1))
+```
+
+# Main hypothesis tests 
+
+Final donation across the three conditions (no covariate: the control
+condition makes a single donation decision, so it has no initial donation),
+then the two advice conditions adjusted for the initial donation.
+
+```{r main-tests}
+res_anova <- aov_ez("participantId", "final_donation_amount", seek, between = "condition")
+res_anova
+emmeans(res_anova, ~ condition)
+pairs(emmeans(res_anova, ~ condition), adjust = "none")
+
+adv <- seek %>% filter(condition != "H_control")
+adv$initial_donation_amount <- scale(adv$initial_donation_amount, scale = FALSE)
+res_ancova <- aov_ez("participantId", "final_donation_amount", adv, between = "condition",
+                     covariate = "initial_donation_amount", factorize = FALSE)
+res_ancova
+pairs(emmeans(res_ancova, ~ condition), adjust = "none")
+```
+
+## Bayesian t-tests (BayesFactor, default Cauchy prior r = 0.707)
+
+Three two-sample Bayesian t-tests: each advice arm vs control on the final
+donation (control has no initial donation, so no change score there), and
+LLM vs human advice on the change score (final - initial). BF10 quantifies
+evidence for a difference; BF01 = 1/BF10 for the null.
+
+```{r bayes-ttests, message=FALSE}
+library(BayesFactor)
+seek$change <- seek$final_donation_amount - seek$initial_donation_amount
+
+# LLM vs control, final donation
+1/ttestBF(x = subset(seek, condition == "H_AI")$final_donation_amount,
+        y = subset(seek, condition == "H_control")$final_donation_amount)
+# Human vs control, final donation
+1/ttestBF(x = subset(seek, condition == "H_H_seeker")$final_donation_amount,
+        y = subset(seek, condition == "H_control")$final_donation_amount)
+# LLM vs human, change score
+1/ttestBF(x = subset(seek, condition == "H_AI")$final_donation_amount,
+        y = subset(seek, condition == "H_H_seeker")$final_donation_amount)
+
+
+
+# LLM vs human, change score
+1/ttestBF(x = subset(seek, condition == "H_AI")$change,
+        y = subset(seek, condition == "H_H_seeker")$change)
+```
+
+# 1. Does advice change decision confidence?
+
+```{r confidence}
+res_conf <- aov_ez("participantId", "decision_confidence", seek, between = "condition")
+res_conf
+emmeans(res_conf, ~ condition)
+pairs(emmeans(res_conf, ~ condition), adjust = "none")
+
+# Bayesian versions (BF01)
+# LLM vs control
+1/ttestBF(x = subset(seek, condition == "H_AI")$decision_confidence,
+        y = subset(seek, condition == "H_control")$decision_confidence)
+# Human vs control
+1/ttestBF(x = subset(seek, condition == "H_H_seeker")$decision_confidence,
+        y = subset(seek, condition == "H_control")$decision_confidence)
+# LLM vs human
+1/ttestBF(x = subset(seek, condition == "H_AI")$decision_confidence,
+        y = subset(seek, condition == "H_H_seeker")$decision_confidence)
+```
+
+# 2. Do the individual-difference scales moderate the effect of advice on donations?
+
+
+```{r scales}
+scales <- list(
+  ai_attitudes = c("ai_beneficial_apps", "ai_positive_wellbeing", "ai_economic_opportunities",
+                   "ai_better_than_humans", "ai_society_benefit", "ai_daily_life_interest",
+                   "ai_prefer_routine_interact", "ai_better_routine_jobs", "ai_job_use_interest",
+                   "ai_complex_decisions", "ai_life_savings_trust"),
+  et_trust     = c("people_advice_problem", "learn_from_experiences", "ask_valued_opinion"),
+  et_mistrust  = c("prefer_internet_info", "people_misunderstand_needs", "faith_people_hurt",
+                   "question_motives", "avoid_acting_on_advice"),
+  et_credulity = c("naive_believe_people", "persuaded_by_people", "wrong_people_advice",
+                   "too_easily_influenced"),
+  aot = NULL,   # built below with reversals
+  ai_use_freq = "ai_use_freq", ai_advice_freq = "ai_personal_advice_freq",
+  human_advice_freq = "human_advice_freq")
+
+seek <- seek %>% mutate(across(c(persevere_against_evidence, beliefs_too_important,
+                                 disregard_conflicting_evidence, cannot_talk_out_right,
+                                 loyalty_over_open_mindedness), ~ 7 - .x, .names = "{.col}_r"))
+scales$aot <- c("consider_new_possibilities", "consider_contrary_evidence", "revise_beliefs_new_info",
+                "persevere_against_evidence_r", "beliefs_too_important_r",
+                "disregard_conflicting_evidence_r", "cannot_talk_out_right_r",
+                "loyalty_over_open_mindedness_r")
+for (s in names(scales)) seek[[s]] <- rowMeans(seek[scales[[s]]], na.rm = TRUE)
+sapply(scales, length)   # items per scale: 11 / 3 / 5 / 4 / 8 / 1 / 1 / 1
+```
+
+Within-scale item correlations
+```{r item-correlations}
+for (s in c("ai_attitudes", "et_trust", "et_mistrust", "et_credulity", "aot")) {
+  m <- round(cor(seek[scales[[s]]], use = "pairwise.complete.obs"), 2)
+  colnames(m) <- abbreviate(colnames(m), 8)
+  cat("\n==", s, "- mean inter-item r:", round(mean(m[lower.tri(m)]), 2), "\n")
+  print(m)
+}
+```
+
+Correlations between the scale scores.
+
+```{r scale-correlations}
+round(cor(seek[names(scales)], use = "pairwise.complete.obs"), 2) %>% kable()
+```
+
+Each moderator is tested two ways (z-scored within the analysis sample):
+**separate** - one regression per scale - and **joint** - all moderators and
+their interactions in a single model. Both are run for two specifications:
+
+- **A. three-level condition, effect-coded** - `final ~ cond3 * scale` with
+  cond3 = LLM / human / no advice.
+- **B. LLM vs human advice with pre-test** - `final ~ initial + condition * scale` 
+
+```{r moderation}
+zsc <- function(df) { for (s in names(scales)) df[[paste0("z_", s)]] <- as.numeric(scale(df[[s]])); df }
+seek_z <- zsc(seek) %>%
+  mutate(cond3 = factor(condition, levels = c("H_AI", "H_H_seeker", "H_control"),
+                        labels = c("LLM", "human", "no_advice")))
+contrasts(seek_z$cond3) <- contr.sum(3)
+colnames(contrasts(seek_z$cond3)) <- c("LLM", "human")
+adv_z  <- zsc(seek %>% filter(condition != "H_control"))
+zs     <- paste0("z_", names(scales))
+all_z  <- sprintf("(%s)", paste(zs, collapse = " + "))
+
+lmA <- function(rhs) lm(reformulate(sprintf("cond3 * %s", rhs),
+                                    "final_donation_amount"), seek_z)
+lmB <- function(rhs) lm(reformulate(c("initial_donation_amount",
+                                      sprintf("condition * %s", rhs)),
+                                    "final_donation_amount"), adv_z)
+omnibus <- function(m, model, fit) {
+  a <- as.data.frame(car::Anova(m, type = 3)); a$term <- rownames(a)
+  a %>% filter(grepl(":z_", term)) %>%
+    transmute(scale = sub(".*:z_", "", term), model, fit,
+              df = Df, F = `F value`, p.value = `Pr(>F)`)
+}
+mod_table <- bind_rows(
+  bind_rows(lapply(zs, function(z) bind_rows(
+    omnibus(lmA(z), "A: 3-level condition", "separate"),
+    omnibus(lmB(z), "B: LLM vs human (adj.)", "separate")))),
+  omnibus(lmA(all_z), "A: 3-level condition", "joint"),
+  omnibus(lmB(all_z), "B: LLM vs human (adj.)", "joint"))
+
+mod_table %>%
+  pivot_wider(names_from = fit, values_from = c(F, p.value)) %>%
+  select(scale, model, df, F_separate, p.value_separate, F_joint, p.value_joint) %>%
+  kable(digits = 3)
+
+# LaTeX version for pasting into Overleaf
+slabs <- c(ai_attitudes = "AI attitudes", et_trust = "Epistemic trust",
+           et_mistrust = "Epistemic mistrust", et_credulity = "Epistemic credulity",
+           aot = "Actively open-minded thinking", ai_use_freq = "AI use frequency",
+           ai_advice_freq = "AI advice frequency",
+           human_advice_freq = "Human advice frequency")
+fmtp3 <- function(p) ifelse(p < .001, "$<.001$", sprintf("%.3f", p))
+mod_table %>%
+  pivot_wider(names_from = fit, values_from = c(F, p.value)) %>%
+  transmute(Scale = ifelse(is.na(slabs[scale]), scale, slabs[scale]),
+            Model = model, df = df,
+            Fs = sprintf("%.2f", F_separate), ps = fmtp3(p.value_separate),
+            Fj = sprintf("%.2f", F_joint),   pj = fmtp3(p.value_joint)) %>%
+  kable(format = "latex", booktabs = TRUE, escape = FALSE, align = "llccccc",
+        col.names = c("Scale", "Model", "$df$", "$F$", "$p$", "$F$", "$p$"),
+        caption = paste("Moderation of donation decisions by individual-difference",
+                        "scales: omnibus Type III condition $\\times$ scale interaction",
+                        "tests. The first $F$/$p$ pair is from separate models (one",
+                        "moderator per model), the second from the joint model (all",
+                        "moderators entered together). Model A: three-level condition,",
+                        "effect-coded, no covariate. Model B: LLM vs.\\ human advice,",
+                        "adjusted for the initial donation."),
+        label = "scale_moderation") %>%
+  writeLines("scale_moderation_table.tex")
+cat("LaTeX table -> scale_moderation_table.tex\n")
+```
+
+# 3. Do people believe they chatted with an LLM or a human, by condition?
+
+
+```{r partner-belief}
+pb <- d %>% filter(condition %in% c("H_AI", "H_H_seeker", "H_H_advisor"),
+                   !is.na(perceived_partner_type)) %>%
+  mutate(believed_llm = perceived_partner_type)
+pb %>% group_by(condition) %>%
+  summarise(n = n(), k = sum(believed_llm), prop_believed_llm = mean(believed_llm),
+            ci_lo = binom.test(k, n)$conf.int[1],
+            ci_hi = binom.test(k, n)$conf.int[2]) %>%
+  select(-k) %>% kable(digits = 2)
+# no condition test here: advisee beliefs are fixed by construction of this
+# robustness subset (H_AI all believed LLM, H_H_seeker all believed human)
+```
+
+
+
+# 4. How do the conversations differ between advisor types?
+
+```{r conversation-characteristics}
+library(stringr)
+cv <- seek %>% filter(condition %in% c("H_AI", "H_H_seeker"), !is.na(chat_transcript)) %>%
+  mutate(arm = factor(ifelse(condition == "H_AI", "LLM", "Human"), c("Human", "LLM")))
+
+advisor_words <- function(tx) {
+  lines <- strsplit(tx, "\n")[[1]]
+  speaker <- rep(NA_character_, length(lines))
+  speaker[startsWith(lines, "advisee:")] <- "advisee"
+  speaker[startsWith(lines, "advisor:")] <- "advisor"
+  for (i in seq_along(speaker)) if (is.na(speaker[i]) && i > 1) speaker[i] <- speaker[i - 1]
+  sum(str_count(sub("^(advisee|advisor): ", "",
+                    lines[!is.na(speaker) & speaker == "advisor"]), "\\S+"))
+}
+cv <- cv %>% rowwise() %>%
+  mutate(advisor_words = advisor_words(chat_transcript),
+         advisor_msgs = sum(startsWith(strsplit(chat_transcript, "\n")[[1]], "advisor:"))) %>%
+  ungroup()
+
+cv %>% group_by(arm) %>%
+  summarise(n = n(), missing_duration = sum(is.na(chat_duration_mins)),
+            mean_words = mean(advisor_words), sd_words = sd(advisor_words),
+            mean_msgs = mean(advisor_msgs),
+            mean_mins = mean(chat_duration_mins), sd_mins = sd(chat_duration_mins),
+            median_mins = median(chat_duration_mins)) %>% kable(digits = 2)
+
+t.test(advisor_words ~ arm, cv)
+t.test(chat_duration_mins ~ arm, cv)
+wilcox.test(chat_duration_mins ~ arm, cv)
+```
+
+## Post-test Scales
+
+```{r posttest-scales}
+pt <- seek %>% filter(condition %in% c("H_AI", "H_H_seeker")) %>%
+  mutate(advice_contradicted_initial_r = 8 - advice_contradicted_initial,
+         advisor_disagreed_r           = 8 - advisor_disagreed)
+post_scales <- list(
+  sycophancy                = c("advice_aligned_initial", "advice_contradicted_initial_r",
+                                "advisor_reassured_initial", "advisor_disagreed_r"),
+  perceived_trustworthiness = c("advisor_best_answer", "advisor_honest",
+                                "advisor_competent", "advisor_loyal"),
+  perceived_rationality     = c("advisor_reasonable_logical", "advisor_considered_facts",
+                                "advisor_logical_analysis", "advisor_rational_objective"))
+for (s in names(post_scales)) {
+  pt[[s]] <- rowMeans(pt[post_scales[[s]]], na.rm = TRUE)
+  m <- cor(pt[post_scales[[s]]], use = "pairwise.complete.obs")
+  cat(s, "- mean inter-item r:", round(mean(m[lower.tri(m)]), 2), "\n")
+}
+cohen_d <- function(a, b) {
+  a <- a[!is.na(a)]; b <- b[!is.na(b)]
+  (mean(a) - mean(b)) / sqrt(((length(a) - 1) * var(a) + (length(b) - 1) * var(b)) /
+                               (length(a) + length(b) - 2))
+}
+```
+
+## Advice / advisor quality
+
+```{r advisor-quality-summary}
+quality <- c(names(post_scales), "advice_quality", "advice_convincing", "advice_mind_change",
+             "advisor_manipulative", "advisor_annoying", "advisor_exaggerating",
+             "charity_info_reliable")
+m_ci <- function(x) {          # "M [lo, hi]" with a 95% CI for the group mean
+  x <- x[!is.na(x)]
+  half <- qt(.975, length(x) - 1) * sd(x) / sqrt(length(x))
+  sprintf("%.2f [%.2f, %.2f]", mean(x), mean(x) - half, mean(x) + half)
+}
+qtab <- bind_rows(lapply(quality, function(v) {
+  a <- pt[[v]][pt$condition == "H_AI"]; b <- pt[[v]][pt$condition == "H_H_seeker"]
+  tt <- t.test(a, b)
+  tibble(measure = v, type = if (v %in% names(post_scales)) "scale" else "item",
+         llm = m_ci(a), human = m_ci(b),
+         d = cohen_d(a, b), t = unname(tt$statistic), df = unname(tt$parameter),
+         p = tt$p.value)
+})) %>%
+  mutate(p_holm = p.adjust(p, "holm")) %>% arrange(desc(abs(d)))
+qtab %>% kable(digits = c(NA, NA, NA, NA, 2, 2, 1, 5, 5))
+
+# LaTeX version for pasting into Overleaf
+qtab %>%
+  transmute(Measure = sub("^(.)", "\\U\\1", gsub("_", " ", measure), perl = TRUE),
+            `LLM $M$ [95\\% CI]` = llm, `Human $M$ [95\\% CI]` = human,
+            `$d$` = sprintf("%.2f", d),
+            `$p_{\\mathrm{Holm}}$` = ifelse(p_holm < .001, "$<.001$", sprintf("%.3f", p_holm))) %>%
+  kable(format = "latex", booktabs = TRUE, escape = FALSE, align = "lccrr",
+        caption = "Advice and advisor quality by advisor type (Cohen's d, LLM minus human; Holm-corrected p within this family).",
+        label = "advisor_quality") %>%
+  writeLines("advisor_quality_table.tex")
+cat("LaTeX table -> advisor_quality_table.tex\n")
+```
+
+## Correlations among the quality measures
+
+
+```{r quality-correlations}
+qlabs <- c(sycophancy = "Sycophancy", perceived_rationality = "Rationality",
+           perceived_trustworthiness = "Trustworthiness", advice_convincing = "Convincing",
+           advice_quality = "Quality", charity_info_reliable = "Reliable info",
+           advisor_annoying = "Annoyed", advisor_exaggerating = "Exaggerating",
+           advice_mind_change = "Mind change", advisor_manipulative = "Manipulative")
+stars <- function(p) as.character(cut(p, c(-1, .001, .01, .05, 1),
+                                      labels = c("***", "**", "*", "")))
+cor_mat <- function(cond) {
+  X <- pt[pt$condition == cond, names(qlabs)]
+  n <- length(qlabs)
+  M <- matrix("", n, n, dimnames = list(unname(qlabs), unname(qlabs)))
+  for (i in 2:n) for (j in 1:(i - 1)) {
+    ct <- cor.test(X[[i]], X[[j]])
+    M[i, j] <- paste0(sprintf("%.2f", ct$estimate), stars(ct$p.value))
+  }
+  M[, -n]   # all rows (1..k), lower triangle
+}
+kable(cor_mat("H_AI"), caption = "LLM advisor arm. * p<.05, ** p<.01, *** p<.001 (uncorrected)")
+kable(cor_mat("H_H_seeker"), caption = "Human advisor arm. * p<.05, ** p<.01, *** p<.001 (uncorrected)")
+
+# LaTeX export of both matrices (same variable order as the quality table)
+latex_cor <- function(cond, caption, label) {
+  M <- cor_mat(cond)
+  rownames(M) <- sprintf("%d. %s", seq_len(nrow(M)), rownames(M))
+  colnames(M) <- as.character(seq_len(ncol(M)))
+  kable(M, format = "latex", booktabs = TRUE, align = rep("r", ncol(M)),
+        caption = paste(caption, "* p<.05, ** p<.01, *** p<.001 (uncorrected)."),
+        label = label)
+}
+writeLines(c(latex_cor("H_AI", "Correlations, LLM advisor arm.", "cor_llm"), "",
+             latex_cor("H_H_seeker", "Correlations, human advisor arm.", "cor_human")),
+           "correlation_tables.tex")
+cat("LaTeX tables -> correlation_tables.tex\n")
+```
+
+## Do the correlations differ between advisor types?
+
+```{r correlation-differences}
+cor_diff <- bind_rows(lapply(combn(names(qlabs), 2, simplify = FALSE), function(pr) {
+  r_arm <- function(cond) {
+    X <- pt[pt$condition == cond, pr]; X <- X[complete.cases(X), ]
+    c(r = cor(X[[1]], X[[2]]), n = nrow(X))
+  }
+  a <- r_arm("H_AI"); b <- r_arm("H_H_seeker")
+  z <- (atanh(a["r"]) - atanh(b["r"])) / sqrt(1 / (a["n"] - 3) + 1 / (b["n"] - 3))
+  tibble(measure_1 = qlabs[pr[1]], measure_2 = qlabs[pr[2]],
+         r_llm = a["r"], n_llm = a["n"], r_human = b["r"], n_human = b["n"],
+         z = z, p = 2 * pnorm(-abs(z)))
+})) %>% mutate(p_holm = p.adjust(p, "holm")) %>% arrange(p)
+cor_diff %>% kable(digits = c(NA, NA, 2, 0, 2, 0, 2, 4, 4))
+
+# LaTeX version: same matrix layout as the per-arm correlation tables; cells
+# show the LLM - human difference on the correlation scale (Fisher z
+# transform, subtract, back-transform: tanh(z_LLM - z_Human)), stars from the
+# two-sample z-test (uncorrected, matching the per-arm tables)
+nq <- length(qlabs)
+Md <- matrix("", nq, nq, dimnames = list(unname(qlabs), unname(qlabs)))
+for (i in 2:nq) for (j in 1:(i - 1)) {
+  row <- cor_diff %>%
+    filter(measure_1 == qlabs[j], measure_2 == qlabs[i])
+  Md[i, j] <- paste0(sprintf("%.2f", tanh(atanh(row$r_llm) - atanh(row$r_human))),
+                     stars(row$p))
+}
+Md <- Md[, -nq]
+rownames(Md) <- sprintf("%d. %s", seq_len(nrow(Md)), rownames(Md))
+colnames(Md) <- as.character(seq_len(ncol(Md)))
+kable(Md, format = "latex", booktabs = TRUE, align = rep("r", ncol(Md)),
+      caption = paste("Difference between the LLM- and human-advisor-arm",
+                      "correlations, on the correlation scale (Fisher",
+                      "z-transformed, subtracted, back-transformed; positive =",
+                      "stronger in the LLM arm). Stars from the two-sample",
+                      "z-test: * p<.05, ** p<.01, *** p<.001 (uncorrected).",
+                      "Only the Rationality--Manipulative difference remains",
+                      "significant after Holm correction across all 45 pairs",
+                      "($p_{\\mathrm{Holm}} = .039$)."),
+      label = "cor_diff") %>%
+  writeLines("correlation_differences_table.tex")
+cat("LaTeX table -> correlation_differences_table.tex\n")
+```
+
+# Figures
+
+```{r fig-style}
+library(ggplot2); library(ggdist)
+COL <- c("LLM Advisor" = "#0072B2", "Human Advisor" = "#E69F00", "No Advice" = "#999999")
+theme_don <- theme_minimal(base_size = 12) +
+  theme(plot.title = element_text(face = "bold", colour = "#1A1E26"),
+        plot.subtitle = element_text(colour = "#6B7078", size = 9.5),
+        axis.title = element_text(colour = "#6B7078", size = 10),
+        axis.text = element_text(colour = "#6B7078", size = 9),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_line(colour = "#D8D9D3", linewidth = 0.25),
+        legend.position = "none")
+fig <- seek %>%
+  filter(!is.na(final_donation_amount)) %>%
+  mutate(arm = factor(recode(condition, H_AI = "LLM Advisor",
+                             H_H_seeker = "Human Advisor", H_control = "No Advice"),
+                      levels = names(COL)),
+         shift = final_donation_amount - initial_donation_amount)
+```
+
+## Donation decisions by condition (raincloud)
+
+```{r fig-raincloud, fig.width=7.5, fig.height=4.8}
+p_rain <- ggplot(fig, aes(arm, final_donation_amount, colour = arm, fill = arm)) +
+  stat_halfeye(adjust = 0.8, width = 0.55, justification = -0.32, .width = 0,
+               point_colour = NA, alpha = 0.55, normalize = "groups") +
+  geom_boxplot(width = 0.11, outlier.shape = NA, alpha = 0.35, linewidth = 0.45) +
+  geom_jitter(aes(x = as.numeric(arm) - 0.22), width = 0.07, height = 0,
+              size = 1.2, alpha = 0.35, shape = 16) +
+  scale_colour_manual(values = COL) + scale_fill_manual(values = COL) +
+  labs(title = "Final Donation by Condition",
+       subtitle = "Cloud: distribution - box: median and quartiles - rain: individual decisions",
+       x = NULL, y = "Final Donation (£)") +
+  theme_don
+p_rain
+```
+
+## Change in donation by advisor type
+
+```{r fig-shift-hist, fig.width=7.5, fig.height=4.2}
+hd <- filter(fig, arm != "No Advice", !is.na(shift))
+# values outside the +/-50 display window, dropped from the histogram
+hd %>% filter(abs(shift) > 50) %>% group_by(arm) %>%
+  summarise(n = n(), values = paste(sort(shift), collapse = ", ")) %>% kable()
+p_hist <- ggplot(filter(hd, abs(shift) <= 50), aes(shift, fill = arm)) +
+  geom_histogram(binwidth = 2, position = "identity", alpha = 0.55, colour = "white",
+                 linewidth = 0.2, boundary = 0) +
+  geom_vline(xintercept = 0, colour = "#6B7078", linetype = "22") +
+  scale_fill_manual(values = COL) +
+  scale_x_continuous(breaks = seq(-50, 50, 10), limits = c(-55, 55)) +
+  labs(title = "Final Minus Initial Donation, by Advisor Type",
+       subtitle = "Overlapping histograms; bars at 0 are participants who did not revise",
+       x = "Final - Initial Donation (£)", y = "Participants", fill = NULL,
+       caption = sprintf("%d participants with |change| > £50 not shown", sum(abs(hd$shift) > 50))) +
+  theme_don + theme(legend.position = "top",
+                    plot.caption = element_text(colour = "#6B7078", size = 8.5, hjust = 0))
+p_hist
+```
+
+## Joint model: does the advice matter beyond the initial donation?
+
+## Combined three-panel figure
+
+```{r fig-three-panel, fig.width=15, fig.height=6}
+library(patchwork)
+p3 <- ((p_rain + labs(title = "A) Final Donation by Condition", subtitle = NULL)) |
+  (p_hist + labs(title = "B) Change in Donation", subtitle = NULL, caption = NULL))) &
+  theme(plot.title  = element_text(size = 20),
+        axis.title  = element_text(size = 17),
+        axis.text   = element_text(size = 15),
+        legend.text = element_text(size = 16))
+p3
+ggsave("figure_donations.png", p3, width = 15, height = 6, dpi = 300)
+try(ggsave("figure_donations.pdf", p3, width = 15, height = 6))  # fails if the pdf is open
+```
+
+## Pairwise relationships among the quality measures
+
+
+```{r fig-quality-pairs, fig.width=13, fig.height=11, message=FALSE, warning=FALSE}
+library(GGally)
+pv <- c("sycophancy", "perceived_rationality", "perceived_trustworthiness",
+        "advice_convincing", "advice_quality", "advisor_manipulative")
+pp <- pt %>%
+  mutate(arm = factor(ifelse(condition == "H_AI", "LLM Advisor", "Human Advisor"),
+                      levels = c("LLM Advisor", "Human Advisor"))) %>%
+  select(all_of(pv), arm)
+p_pairs <- ggpairs(pp, columns = seq_along(pv), columnLabels = unname(qlabs[pv]),
+                   mapping = aes(colour = arm, fill = arm),
+                   upper = list(continuous = wrap("cor", size = 3.4)),
+                   lower = list(continuous = wrap("points", size = 1, alpha = 0.3)),
+                   diag  = list(continuous = wrap("densityDiag", alpha = 0.5)),
+                   legend = c(1, 1)) +
+  scale_colour_manual(values = COL) + scale_fill_manual(values = COL) +
+  theme_don + theme(legend.position = "top")
+p_pairs
+ggsave("figure_quality_pairs.png", p_pairs, width = 13, height = 11, dpi = 200)
+```
